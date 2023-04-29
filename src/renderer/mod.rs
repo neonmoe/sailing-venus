@@ -23,26 +23,30 @@ pub const FORWARD: Vec3 = Vec3::new(0.0, 0.0, 1.0);
 pub struct Renderer {
     gltf_shader: gltf::ShaderProgram,
     draw_calls: DrawCalls,
+    ui_draw_calls: DrawCalls,
     camera: camera::Camera,
+
     ship: gltf::Gltf,
     room: gltf::Gltf,
     character: gltf::Gltf,
+    button: gltf::Gltf,
 }
 
 impl Renderer {
     pub fn new() -> Renderer {
-        let gltf_shader = gltf::create_program();
-        let draw_calls = DrawCalls::new();
         let ship = gltf::load_glb(include_bytes!("../../resources/models/ship.glb"));
         let room = gltf::load_glb(include_bytes!("../../resources/models/room.glb"));
         let character = gltf::load_glb(include_bytes!("../../resources/models/character.glb"));
+        let button = gltf::load_glb(include_bytes!("../../resources/models/button.glb"));
         Renderer {
-            gltf_shader,
-            draw_calls,
+            gltf_shader: gltf::create_program(),
+            draw_calls: DrawCalls::new(),
+            ui_draw_calls: DrawCalls::new(),
             camera: camera::Camera::new(),
             ship,
             room,
             character,
+            button,
         }
     }
 
@@ -90,9 +94,10 @@ impl Renderer {
         self.camera.distance = (self.camera.distance - pixels as f32 * 10.0).clamp(10.0, 50.0);
     }
 
-    pub fn render(&mut self, aspect_ratio: f32, time: f32, ship_game: &ShipGame) {
-        self.draw_calls.clear();
+    pub fn render(&mut self, width: f32, height: f32, time: f32, ship_game: &ShipGame) {
+        // Render world:
 
+        self.draw_calls.clear();
         for room in &ship_game.rooms {
             let position = Vec3::new(room.position.x, 0.0, room.position.y);
             match room.room_type {
@@ -120,25 +125,65 @@ impl Renderer {
         gl::call!(gl::Enable(gl::DEPTH_TEST));
         gl::call!(gl::DepthFunc(gl::GREATER));
 
-        let (view_matrix, proj_matrix) = self.get_view_and_proj_matrices(aspect_ratio);
-        let view_matrix = view_matrix.to_cols_array();
-        let proj_matrix = proj_matrix.to_cols_array();
+        let (v, p) = self.get_view_and_proj_matrices(width / height);
+        let world_view_matrix = v.to_cols_array();
+        let world_proj_matrix = p.to_cols_array();
 
-        // Draw glTFs:
         gl::call!(gl::UseProgram(self.gltf_shader.program));
         gl::call!(gl::UniformMatrix4fv(
             self.gltf_shader.proj_from_view_location,
             1,
             gl::FALSE,
-            proj_matrix.as_ptr(),
+            world_proj_matrix.as_ptr(),
         ));
         gl::call!(gl::UniformMatrix4fv(
             self.gltf_shader.view_from_world_location,
             1,
             gl::FALSE,
-            view_matrix.as_ptr(),
+            world_view_matrix.as_ptr(),
         ));
         self.draw_calls.draw(gltf::ATTR_LOC_MODEL_TRANSFORM_COLUMNS);
+
+        // Render UI:
+
+        self.ui_draw_calls.clear();
+
+        gl::call!(gl::ClearDepthf(1.0));
+        gl::call!(gl::Clear(gl::DEPTH_BUFFER_BIT));
+        gl::call!(gl::DepthFunc(gl::LESS));
+
+        // TODO: draw_call collect, proj+view matrix, draw_call draw just for the UI
+        // TODO: 2D UI can just use glTF and an orthographic projection
+        self.button.draw(
+            &mut self.ui_draw_calls,
+            Mat4::from_translation(Vec3::new(100.0, 100.0, 0.5)),
+        );
+
+        // Text rendering:
+        // TODO: Collect a bunch of strings, font indices and render positions to render as text
+        // TODO: Update texture with whatever needs updating
+        // TODO: Add a per-instance vertex attribute with a vec4 that contains texcoord bounds
+        // TODO: Render a single quad for each character, using the model transform for position & above for glyph selection
+        // the quad can be defined completely ahead-of-time as a single triangle, pretty sure
+
+        let ui_proj_matrix =
+            Mat4::orthographic_rh_gl(0.0, width, 0.0, height, -100.0, 100.0).to_cols_array();
+        let ui_view_matrix = Mat4::IDENTITY.to_cols_array();
+        gl::call!(gl::UseProgram(self.gltf_shader.program));
+        gl::call!(gl::UniformMatrix4fv(
+            self.gltf_shader.proj_from_view_location,
+            1,
+            gl::FALSE,
+            ui_proj_matrix.as_ptr(),
+        ));
+        gl::call!(gl::UniformMatrix4fv(
+            self.gltf_shader.view_from_world_location,
+            1,
+            gl::FALSE,
+            ui_view_matrix.as_ptr(),
+        ));
+        self.ui_draw_calls
+            .draw(gltf::ATTR_LOC_MODEL_TRANSFORM_COLUMNS);
     }
 
     fn get_view_and_proj_matrices(&self, aspect_ratio: f32) -> (Mat4, Mat4) {

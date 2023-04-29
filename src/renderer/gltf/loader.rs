@@ -620,7 +620,7 @@ pub fn load_gltf(gltf: &str, resources: &[(&str, &[u8])]) -> gltf::Gltf {
             let (texture, sampler) = unpack_texture_info(texture_info);
             textures[4] = Some((gltf::TEX_UNIT_EMISSIVE, texture, sampler));
         } else {
-            textures[4] = Some((gltf::TEX_UNIT_EMISSIVE, black_tex, default_sampler));
+            textures[4] = Some((gltf::TEX_UNIT_EMISSIVE, white_tex, default_sampler));
         }
         if let Some(factor) = material.get("emissiveFactor") {
             let factor = factor.get::<Vec<_>>().unwrap();

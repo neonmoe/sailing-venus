@@ -89,6 +89,9 @@ void main() {
   float texel_occlusion = texture(occlusion_tex, tex_coords).r;
   vec3 texel_emissive = texture(emissive_tex, tex_coords).rgb;
 
+  float pixel_alpha = texel_base_color.a * base_color_factor.a;
+  if (pixel_alpha < 0.01)
+    discard;
   vec3 pixel_base_color =
       texel_base_color.rgb * vertex_color * base_color_factor.rgb;
   float pixel_metallic = texel_metallic_roughness.x * material_params.x;
@@ -125,5 +128,5 @@ void main() {
 
   // The framebuffer is not SRGB, so we transform the linear color to
   // close-enough-to-srgb.
-  FRAG_COLOR = vec4(pow(output_linear_color, vec3(1.0 / 2.2)), 1.0);
+  FRAG_COLOR = vec4(pow(output_linear_color, vec3(1.0 / 2.2)), pixel_alpha);
 }

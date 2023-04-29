@@ -259,7 +259,7 @@ extern "C" fn run_frame() {
     ship_game.update(dt);
 
     let (w, h) = window.drawable_size();
-    renderer.render(w as f32 / h as f32, *time, &ship_game);
+    renderer.render(w as f32, h as f32, *time, &ship_game);
     window.gl_swap_window();
 }
 
