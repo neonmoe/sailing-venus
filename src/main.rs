@@ -1,4 +1,5 @@
 use anyhow::Context;
+use glam::Vec2;
 use sdl2::event::{Event, WindowEvent};
 use sdl2::mouse::{MouseButton, MouseWheelDirection};
 use sdl2::rect::Point;
@@ -14,9 +15,12 @@ use std::time::Instant;
 
 #[cfg(target_family = "wasm")]
 mod emscripten_h;
+mod math;
 mod renderer;
+mod ship_game;
 
 use renderer::Renderer;
+use ship_game::ShipGame;
 
 fn main() {
     panic::set_hook(Box::new(|panic_info| {
@@ -137,9 +141,11 @@ struct State {
     lmouse_pressed: bool,
     rmouse_pressed: bool,
     mouse_position: Point,
+    accumulated_mouse_rel: (i32, i32),
     renderer: Renderer,
     time: f32,
     last_frame: Instant,
+    ship_game: ShipGame,
 }
 
 impl State {
@@ -151,8 +157,10 @@ impl State {
             lmouse_pressed: false,
             rmouse_pressed: false,
             mouse_position: Point::new(0, 0),
+            accumulated_mouse_rel: (0, 0),
             time: 0.0,
             last_frame: Instant::now(),
+            ship_game: ShipGame::new(),
         }
     }
 }
@@ -163,10 +171,12 @@ extern "C" fn run_frame() {
         lmouse_pressed,
         rmouse_pressed,
         mouse_position,
+        accumulated_mouse_rel,
         renderer,
         window,
         time,
         last_frame,
+        ship_game,
         ..
     } = unsafe { &mut STATE }.as_mut().unwrap();
 
@@ -180,24 +190,51 @@ extern "C" fn run_frame() {
                 }
                 _ => {}
             },
-            Event::MouseButtonDown { mouse_btn, .. } => match mouse_btn {
-                MouseButton::Left => *lmouse_pressed = true,
+            Event::MouseButtonDown {
+                mouse_btn, x, y, ..
+            } => match mouse_btn {
+                MouseButton::Left => {
+                    *lmouse_pressed = true;
+                    let (w, h) = window.size();
+                    let mut clip_coords =
+                        Vec2::new(x as f32 / w as f32, y as f32 / h as f32) * 2.0 - Vec2::ONE;
+                    clip_coords.y *= -1.0;
+                    let pos = renderer.clip_to_ship_space(clip_coords, w as f32 / h as f32);
+                    ship_game.click(pos);
+                }
                 MouseButton::Right => *rmouse_pressed = true,
                 _ => {}
             },
-            Event::MouseButtonUp { mouse_btn, .. } => match mouse_btn {
-                MouseButton::Left => *lmouse_pressed = false,
-                MouseButton::Right => *rmouse_pressed = false,
-                _ => {}
-            },
+            Event::MouseButtonUp { mouse_btn, .. } => {
+                match mouse_btn {
+                    MouseButton::Left => *lmouse_pressed = false,
+                    MouseButton::Right => *rmouse_pressed = false,
+                    _ => {}
+                }
+                *accumulated_mouse_rel = (0, 0);
+            }
             Event::MouseMotion {
-                x, y, xrel, yrel, ..
+                x,
+                y,
+                mut xrel,
+                mut yrel,
+                ..
             } => {
                 *mouse_position = Point::new(x, y);
                 if *rmouse_pressed {
                     renderer.rotate_camera(xrel, yrel);
                 }
                 if *lmouse_pressed {
+                    // Look movement
+                    let threshold = 25i32.pow(2);
+                    let (acc_x, acc_y) = accumulated_mouse_rel;
+                    if acc_x.pow(2) + acc_y.pow(2) < threshold {
+                        *acc_x += xrel;
+                        *acc_y += yrel;
+                        // Haven't moved enough yet, don't move.
+                        xrel = 0;
+                        yrel = 0;
+                    }
                     let (_, h) = window.size();
                     renderer.move_camera(xrel as f32 / h as f32, yrel as f32 / h as f32);
                 }
@@ -215,11 +252,14 @@ extern "C" fn run_frame() {
     }
 
     let now = Instant::now();
-    *time += (now - *last_frame).as_secs_f32();
+    let dt = (now - *last_frame).as_secs_f32();
+    *time += dt;
     *last_frame = now;
 
+    ship_game.update(dt);
+
     let (w, h) = window.drawable_size();
-    renderer.render(w as f32 / h as f32, *time);
+    renderer.render(w as f32 / h as f32, *time, &ship_game);
     window.gl_swap_window();
 }
 

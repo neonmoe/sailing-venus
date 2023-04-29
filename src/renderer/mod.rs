@@ -1,6 +1,6 @@
+use crate::ship_game::{RoomType, ShipGame};
+use glam::{Mat4, Quat, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
 use std::f32::consts::TAU;
-
-use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 
 mod bumpalloc_buffer;
 mod camera;
@@ -46,6 +46,27 @@ impl Renderer {
         }
     }
 
+    pub fn clip_to_ship_space(&self, clip_coords: Vec2, aspect_ratio: f32) -> Vec2 {
+        let clip_vec = Vec4::new(clip_coords.x, clip_coords.y, 1.0, 1.0);
+        let (view, proj) = self.get_view_and_proj_matrices(aspect_ratio);
+        let view_inv = view.inverse();
+        let proj_inv = proj.inverse();
+        let mut view_point = proj_inv * clip_vec;
+        view_point /= view_point.w;
+        let view_point = Vec4::from((view_point.xyz().normalize(), 0.0));
+        let look_dir = (view_inv * view_point).xyz().normalize();
+        let ship_coord = if look_dir.dot(Vec3::Y) >= 0.0 {
+            Vec2::new(f32::INFINITY, f32::INFINITY)
+        } else {
+            let origin = (view_inv * Vec4::new(0.0, 0.0, 0.0, 1.0)).xyz();
+            let length = (origin.y / look_dir.y).abs();
+            let floor_point = origin + look_dir * length;
+            floor_point.xz()
+        };
+        let maximum_distance = 100.0;
+        ship_coord.clamp(-Vec2::ONE * maximum_distance, Vec2::ONE * maximum_distance)
+    }
+
     pub fn move_camera(&mut self, x: f32, y: f32) {
         // TODO: Add camera move sensitivity
         let sensitivity = Vec2::ONE * 0.4 * self.camera.distance;
@@ -69,12 +90,28 @@ impl Renderer {
         self.camera.distance = (self.camera.distance - pixels as f32 * 10.0).clamp(10.0, 50.0);
     }
 
-    pub fn render(&mut self, aspect_ratio: f32, time: f32) {
+    pub fn render(&mut self, aspect_ratio: f32, time: f32, ship_game: &ShipGame) {
         self.draw_calls.clear();
-        self.character.copy_lights_from(&self.room);
-        for model in [&self.ship, &self.room, &self.character] {
-            model.draw(&mut self.draw_calls, Mat4::IDENTITY);
+
+        for room in &ship_game.rooms {
+            let position = Vec3::new(room.position.x, 0.0, room.position.y);
+            match room.room_type {
+                RoomType::Empty => {}
+                RoomType::Navigation => {
+                    self.room
+                        .draw(&mut self.draw_calls, Mat4::from_translation(position));
+                }
+            }
         }
+        for character in &ship_game.characters {
+            let position = Vec3::new(character.position.x, 0.0, character.position.y);
+            let rot = character.look_dir.angle_between(Vec2::Y);
+            self.character.draw(
+                &mut self.draw_calls,
+                Mat4::from_rotation_translation(Quat::from_rotation_y(rot), position),
+            );
+        }
+        self.ship.draw(&mut self.draw_calls, Mat4::IDENTITY);
 
         gl::call!(gl::ClearColor(0.1, 0.1, 0.1, 1.0));
         gl::call!(gl::ClearDepthf(0.0));
@@ -83,18 +120,9 @@ impl Renderer {
         gl::call!(gl::Enable(gl::DEPTH_TEST));
         gl::call!(gl::DepthFunc(gl::GREATER));
 
-        let view_matrix = self.camera.view_matrix().to_cols_array();
-        // OpenGL clip space: right-handed, +X right, +Y up, +Z backward (out of screen).
-        // GLTF:              right-handed, +X left, +Y up, +Z forward (into the screen).
-        let to_opengl_basis = Mat4::from_cols(
-            (RIGHT, 0.0).into(),    // +X is right in OpenGL clip space
-            (UP, 0.0).into(),       // +Y is up in OpenGL clip space
-            (-FORWARD, 0.0).into(), // +Z is backward in OpenGL clip space
-            Vec4::new(0.0, 0.0, 0.0, 1.0),
-        );
-        let proj_matrix = (Mat4::perspective_rh_gl(20f32.to_radians(), aspect_ratio, 100.0, 0.3)
-            * to_opengl_basis)
-            .to_cols_array();
+        let (view_matrix, proj_matrix) = self.get_view_and_proj_matrices(aspect_ratio);
+        let view_matrix = view_matrix.to_cols_array();
+        let proj_matrix = proj_matrix.to_cols_array();
 
         // Draw glTFs:
         gl::call!(gl::UseProgram(self.gltf_shader.program));
@@ -111,5 +139,21 @@ impl Renderer {
             view_matrix.as_ptr(),
         ));
         self.draw_calls.draw(gltf::ATTR_LOC_MODEL_TRANSFORM_COLUMNS);
+    }
+
+    fn get_view_and_proj_matrices(&self, aspect_ratio: f32) -> (Mat4, Mat4) {
+        // OpenGL clip space: right-handed, +X right, +Y up, +Z backward (out of screen).
+        // GLTF:              right-handed, +X left, +Y up, +Z forward (into the screen).
+        let to_opengl_basis = Mat4::from_cols(
+            (RIGHT, 0.0).into(),    // +X is right in OpenGL clip space
+            (UP, 0.0).into(),       // +Y is up in OpenGL clip space
+            (-FORWARD, 0.0).into(), // +Z is backward in OpenGL clip space
+            Vec4::new(0.0, 0.0, 0.0, 1.0),
+        );
+
+        let view_matrix = self.camera.view_matrix();
+        let proj_matrix =
+            Mat4::perspective_rh_gl(20f32.to_radians(), aspect_ratio, 100.0, 0.3) * to_opengl_basis;
+        (view_matrix, proj_matrix)
     }
 }
