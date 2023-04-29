@@ -1,8 +1,9 @@
 use std::f32::consts::TAU;
 
-use glam::{Mat4, Quat, Vec3, Vec4};
+use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 
 mod bumpalloc_buffer;
+mod camera;
 mod draw_calls;
 pub mod gl;
 pub mod gltf;
@@ -22,30 +23,58 @@ pub const FORWARD: Vec3 = Vec3::new(0.0, 0.0, 1.0);
 pub struct Renderer {
     gltf_shader: gltf::ShaderProgram,
     draw_calls: DrawCalls,
-    test: gltf::Gltf,
+    camera: camera::Camera,
+    ship: gltf::Gltf,
+    room: gltf::Gltf,
+    character: gltf::Gltf,
 }
 
 impl Renderer {
     pub fn new() -> Renderer {
         let gltf_shader = gltf::create_program();
         let draw_calls = DrawCalls::new();
-        let test = gltf::load_glb(include_bytes!("../../resources/models/character.glb"));
+        let ship = gltf::load_glb(include_bytes!("../../resources/models/ship.glb"));
+        let room = gltf::load_glb(include_bytes!("../../resources/models/room.glb"));
+        let character = gltf::load_glb(include_bytes!("../../resources/models/character.glb"));
         Renderer {
             gltf_shader,
             draw_calls,
-            test,
+            camera: camera::Camera::new(),
+            ship,
+            room,
+            character,
         }
+    }
+
+    pub fn move_camera(&mut self, x: f32, y: f32) {
+        // TODO: Add camera move sensitivity
+        let sensitivity = Vec2::ONE * 0.4 * self.camera.distance;
+        let view_space_move = Vec3::new(x * sensitivity.x, 0.0, y * sensitivity.y);
+        let world_space_move =
+            Quat::from_rotation_y(-(self.camera.yaw + TAU / 2.0)) * view_space_move;
+        // TODO: Use the bounds of all the rooms here
+        self.camera.focus =
+            (self.camera.focus + world_space_move).clamp(Vec3::ONE * -10.0, Vec3::ONE * 10.0);
+    }
+
+    pub fn rotate_camera(&mut self, x: i32, y: i32) {
+        // TODO: Add camera rotation sensitivity
+        self.camera.yaw += x as f32 * 0.01;
+        self.camera.pitch =
+            (self.camera.pitch + y as f32 * 0.01).clamp(30.0 / 360.0 * TAU, 90.0 / 360.0 * TAU);
+    }
+
+    pub fn zoom_camera(&mut self, pixels: i32) {
+        // TODO: Add camera zoom sensitivity
+        self.camera.distance = (self.camera.distance - pixels as f32 * 10.0).clamp(10.0, 50.0);
     }
 
     pub fn render(&mut self, aspect_ratio: f32, time: f32) {
         self.draw_calls.clear();
-        self.test.draw(
-            &mut self.draw_calls,
-            Mat4::from_rotation_translation(
-                Quat::from_rotation_y(TAU * 5.0 / 8.0),
-                Vec3::new(0.0, -1.0, 4.0),
-            ),
-        );
+        self.character.copy_lights_from(&self.room);
+        for model in [&self.ship, &self.room, &self.character] {
+            model.draw(&mut self.draw_calls, Mat4::IDENTITY);
+        }
 
         gl::call!(gl::ClearColor(0.1, 0.1, 0.1, 1.0));
         gl::call!(gl::ClearDepthf(0.0));
@@ -54,7 +83,7 @@ impl Renderer {
         gl::call!(gl::Enable(gl::DEPTH_TEST));
         gl::call!(gl::DepthFunc(gl::GREATER));
 
-        let view_matrix = Mat4::IDENTITY.to_cols_array();
+        let view_matrix = self.camera.view_matrix().to_cols_array();
         // OpenGL clip space: right-handed, +X right, +Y up, +Z backward (out of screen).
         // GLTF:              right-handed, +X left, +Y up, +Z forward (into the screen).
         let to_opengl_basis = Mat4::from_cols(
@@ -63,7 +92,7 @@ impl Renderer {
             (-FORWARD, 0.0).into(), // +Z is backward in OpenGL clip space
             Vec4::new(0.0, 0.0, 0.0, 1.0),
         );
-        let proj_matrix = (Mat4::perspective_rh_gl(74f32.to_radians(), aspect_ratio, 100.0, 0.3)
+        let proj_matrix = (Mat4::perspective_rh_gl(20f32.to_radians(), aspect_ratio, 100.0, 0.3)
             * to_opengl_basis)
             .to_cols_array();
 

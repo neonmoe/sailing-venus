@@ -1,3 +1,4 @@
 /target
 /.vscode
 /dist
+*.blend[0-9]

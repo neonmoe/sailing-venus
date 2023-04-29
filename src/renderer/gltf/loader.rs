@@ -636,7 +636,7 @@ pub fn load_gltf(gltf: &str, resources: &[(&str, &[u8])]) -> gltf::Gltf {
         let ubo_size = material_data.len();
         let ubos = [
             Some((gltf::UNIFORM_BLOCK_MATERIAL, ubo, ubo_offset, ubo_size)),
-            Some(lights_uniform_block),
+            Some(lights_uniform_block), // this index is depended on in Gltf::copy_lights_from
         ];
 
         materials.push(gltf::Material {

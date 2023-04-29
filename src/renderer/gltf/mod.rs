@@ -56,6 +56,13 @@ impl Gltf {
         self._draw(draw_calls, model_transform, |i| self.nodes[i].transform)
     }
 
+    pub fn copy_lights_from(&mut self, other: &Gltf) {
+        // TODO: Why doesn't this work?
+        for (material, other) in self.materials.iter_mut().zip(other.materials.iter()) {
+            material.uniforms.ubos[1] = other.uniforms.ubos[1].clone();
+        }
+    }
+
     pub fn draw_animated(
         &self,
         draw_calls: &mut DrawCalls,
