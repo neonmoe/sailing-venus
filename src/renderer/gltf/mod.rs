@@ -7,7 +7,7 @@ mod loader;
 mod program;
 
 pub use animation::*;
-pub use loader::load_gltf;
+pub use loader::{load_glb, load_gltf};
 pub use program::*;
 
 pub struct Gltf {

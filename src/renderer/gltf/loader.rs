@@ -12,7 +12,24 @@ use std::ffi::c_void;
 use std::ptr;
 use tinyjson::JsonValue;
 
-// TODO: load_glb
+#[track_caller]
+pub fn load_glb(glb: &[u8]) -> gltf::Gltf {
+    fn read_chunk<'a>(expected_type: &[u8], bs: &'a [u8]) -> (&'a [u8], usize) {
+        let len = u32::from_le_bytes([bs[0], bs[1], bs[2], bs[3]]) as usize;
+        assert_eq!(expected_type, &bs[4..8]);
+        (&bs[8..8 + len], 8 + len)
+    }
+
+    let glb = &glb[12..];
+
+    let (gltf, next_start) = read_chunk(b"JSON", &glb);
+    let glb = &glb[next_start..];
+
+    let gltf = std::str::from_utf8(gltf).unwrap();
+    let (bin, _) = read_chunk(b"BIN\0", &glb);
+
+    load_gltf(gltf, &[("", bin)])
+}
 
 #[track_caller]
 pub fn load_gltf(gltf: &str, resources: &[(&str, &[u8])]) -> gltf::Gltf {
@@ -155,10 +172,11 @@ pub fn load_gltf(gltf: &str, resources: &[(&str, &[u8])]) -> gltf::Gltf {
     };
 
     let meshes_json = gltf["meshes"].get::<Vec<_>>().unwrap();
-    let primitive_count = meshes_json
-        .iter()
-        .flat_map(|mesh| mesh["primitives"].get::<Vec<_>>())
-        .count();
+    let mut primitive_count = 0;
+    for mesh in meshes_json {
+        let primitives_json = mesh["primitives"].get::<Vec<_>>().unwrap();
+        primitive_count += primitives_json.len();
+    }
     let mut gl_vaos = vec![0; primitive_count];
     gl::call!(gl::GenVertexArrays(
         gl_vaos.len() as i32,
@@ -242,8 +260,16 @@ pub fn load_gltf(gltf: &str, resources: &[(&str, &[u8])]) -> gltf::Gltf {
     }
 
     let materials_json = gltf["materials"].get::<Vec<_>>().unwrap();
-    let textures_json = gltf["textures"].get::<Vec<_>>().unwrap();
-    let images_json = gltf["images"].get::<Vec<_>>().unwrap();
+    let textures_json_fallback = Vec::with_capacity(0);
+    let textures_json = gltf
+        .get("textures")
+        .map(|v| v.get::<Vec<_>>().unwrap())
+        .unwrap_or(&textures_json_fallback);
+    let images_json_fallback = Vec::with_capacity(0);
+    let images_json = gltf
+        .get("images")
+        .map(|v| v.get::<Vec<_>>().unwrap())
+        .unwrap_or(&images_json_fallback);
     let mut is_srgb = vec![None; images_json.len()];
     for material in materials_json {
         let material = material.get::<HashMap<_, _>>().unwrap();

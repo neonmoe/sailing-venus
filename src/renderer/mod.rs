@@ -22,20 +22,30 @@ pub const FORWARD: Vec3 = Vec3::new(0.0, 0.0, 1.0);
 pub struct Renderer {
     gltf_shader: gltf::ShaderProgram,
     draw_calls: DrawCalls,
+    test: gltf::Gltf,
 }
 
 impl Renderer {
     pub fn new() -> Renderer {
         let gltf_shader = gltf::create_program();
         let draw_calls = DrawCalls::new();
+        let test = gltf::load_glb(include_bytes!("../../resources/models/character.glb"));
         Renderer {
             gltf_shader,
             draw_calls,
+            test,
         }
     }
 
     pub fn render(&mut self, aspect_ratio: f32, time: f32) {
         self.draw_calls.clear();
+        self.test.draw(
+            &mut self.draw_calls,
+            Mat4::from_rotation_translation(
+                Quat::from_rotation_y(TAU * 5.0 / 8.0),
+                Vec3::new(0.0, -1.0, 4.0),
+            ),
+        );
 
         gl::call!(gl::ClearColor(0.1, 0.1, 0.1, 1.0));
         gl::call!(gl::ClearDepthf(0.0));
