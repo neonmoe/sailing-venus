@@ -63,6 +63,12 @@ impl Gltf {
         }
     }
 
+    pub fn transform_lights(&mut self) {
+        // TODO: Hold the original lights somewhere
+        // TODO: Update ubo with newly transformed lights
+        todo!();
+    }
+
     pub fn draw_animated(
         &self,
         draw_calls: &mut DrawCalls,
@@ -98,7 +104,7 @@ impl Gltf {
                     draw_call.front_face = (transform.determinant() > 0.0)
                         .then_some(gl::CCW)
                         .unwrap_or(gl::CW);
-                    draw_calls.add(uniforms, &draw_call, transform);
+                    draw_calls.add(uniforms, &draw_call, transform, Mat4::IDENTITY);
                 }
             }
             for &child_index in &self.nodes[node_index].child_node_indices {

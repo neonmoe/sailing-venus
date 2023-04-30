@@ -1,10 +1,12 @@
 use crate::ship_game::{RoomType, ShipGame};
+use fontdue::layout::{HorizontalAlign, VerticalAlign};
 use glam::{Mat4, Quat, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
 use std::f32::consts::TAU;
 
 mod bumpalloc_buffer;
 mod camera;
 mod draw_calls;
+mod font_renderer;
 pub mod gl;
 pub mod gltf;
 
@@ -25,6 +27,7 @@ pub struct Renderer {
     draw_calls: DrawCalls,
     ui_draw_calls: DrawCalls,
     camera: camera::Camera,
+    text: font_renderer::FontRenderer,
 
     ship: gltf::Gltf,
     room: gltf::Gltf,
@@ -43,6 +46,7 @@ impl Renderer {
             draw_calls: DrawCalls::new(),
             ui_draw_calls: DrawCalls::new(),
             camera: camera::Camera::new(),
+            text: font_renderer::FontRenderer::new(),
             ship,
             room,
             character,
@@ -94,7 +98,7 @@ impl Renderer {
         self.camera.distance = (self.camera.distance - pixels as f32 * 10.0).clamp(10.0, 50.0);
     }
 
-    pub fn render(&mut self, width: f32, height: f32, time: f32, ship_game: &ShipGame) {
+    pub fn render(&mut self, width: f32, height: f32, _time: f32, ship_game: &ShipGame) {
         // Render world:
 
         self.draw_calls.clear();
@@ -118,6 +122,7 @@ impl Renderer {
         }
         self.ship.draw(&mut self.draw_calls, Mat4::IDENTITY);
 
+        gl::call!(gl::Disable(gl::BLEND));
         gl::call!(gl::ClearColor(0.1, 0.1, 0.1, 1.0));
         gl::call!(gl::ClearDepthf(0.0));
         gl::call!(gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT));
@@ -142,21 +147,39 @@ impl Renderer {
             gl::FALSE,
             world_view_matrix.as_ptr(),
         ));
-        self.draw_calls.draw(gltf::ATTR_LOC_MODEL_TRANSFORM_COLUMNS);
+        self.draw_calls.draw(
+            gltf::ATTR_LOC_MODEL_TRANSFORM_COLUMNS,
+            gltf::ATTR_LOC_TEXCOORD_TRANSFORM_COLUMNS,
+        );
 
         // Render UI:
 
         self.ui_draw_calls.clear();
 
+        gl::call!(gl::Enable(gl::BLEND));
+        gl::call!(gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA));
         gl::call!(gl::ClearDepthf(1.0));
         gl::call!(gl::Clear(gl::DEPTH_BUFFER_BIT));
         gl::call!(gl::DepthFunc(gl::LESS));
+
+        // for easier hud debugging
+        gl::call!(gl::ClearColor(0.4, 0.4, 0.4, 1.0));
+        gl::call!(gl::Clear(gl::COLOR_BUFFER_BIT));
 
         // TODO: draw_call collect, proj+view matrix, draw_call draw just for the UI
         // TODO: 2D UI can just use glTF and an orthographic projection
         self.button.draw(
             &mut self.ui_draw_calls,
             Mat4::from_translation(Vec3::new(100.0, 100.0, 0.5)),
+        );
+
+        self.text.draw_text(
+            &mut self.ui_draw_calls,
+            "Hello, world!",
+            Vec2::new(100.0, 150.0),
+            0.0,
+            28.0,
+            (HorizontalAlign::Left, VerticalAlign::Bottom),
         );
 
         // Text rendering:
@@ -167,7 +190,7 @@ impl Renderer {
         // the quad can be defined completely ahead-of-time as a single triangle, pretty sure
 
         let ui_proj_matrix =
-            Mat4::orthographic_rh_gl(0.0, width, 0.0, height, -100.0, 100.0).to_cols_array();
+            Mat4::orthographic_rh_gl(0.0, width, 0.0, height, -10.0, 10.0).to_cols_array();
         let ui_view_matrix = Mat4::IDENTITY.to_cols_array();
         gl::call!(gl::UseProgram(self.gltf_shader.program));
         gl::call!(gl::UniformMatrix4fv(
@@ -182,8 +205,10 @@ impl Renderer {
             gl::FALSE,
             ui_view_matrix.as_ptr(),
         ));
-        self.ui_draw_calls
-            .draw(gltf::ATTR_LOC_MODEL_TRANSFORM_COLUMNS);
+        self.ui_draw_calls.draw(
+            gltf::ATTR_LOC_MODEL_TRANSFORM_COLUMNS,
+            gltf::ATTR_LOC_TEXCOORD_TRANSFORM_COLUMNS,
+        );
     }
 
     fn get_view_and_proj_matrices(&self, aspect_ratio: f32) -> (Mat4, Mat4) {

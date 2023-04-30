@@ -34,7 +34,7 @@ macro_rules! call {
 }
 pub(crate) use call;
 
-use std::ffi::CString;
+use std::ffi::{c_void, CString};
 
 #[track_caller]
 pub fn create_shader(type_: types::GLenum, shader_source: &str) -> u32 {
@@ -112,4 +112,37 @@ pub fn get_uniform_block_index(program: u32, name: &str) -> Option<u32> {
     } else {
         Some(location)
     }
+}
+
+pub fn setup_linear_sampler(sampler: u32, mipmaps: bool) {
+    call!(SamplerParameteri(
+        sampler,
+        TEXTURE_MAG_FILTER,
+        LINEAR as i32,
+    ));
+    if mipmaps {
+        call!(SamplerParameteri(
+            sampler,
+            TEXTURE_MIN_FILTER,
+            LINEAR_MIPMAP_LINEAR as i32,
+        ));
+    } else {
+        call!(SamplerParameteri(
+            sampler,
+            TEXTURE_MIN_FILTER,
+            LINEAR as i32,
+        ));
+    }
+    call!(SamplerParameteri(sampler, TEXTURE_WRAP_S, REPEAT as i32,));
+    call!(SamplerParameteri(sampler, TEXTURE_WRAP_T, REPEAT as i32,));
+}
+
+pub fn write_1px_rgb_texture(tex: u32, color: [u8; 3]) {
+    let target = TEXTURE_2D;
+    let ifmt = RGB as i32;
+    let fmt = RGB;
+    let type_ = UNSIGNED_BYTE;
+    let pixels = color.as_ptr() as *const c_void;
+    call!(BindTexture(target, tex));
+    call!(TexImage2D(target, 0, ifmt, 1, 1, 0, fmt, type_, pixels));
 }

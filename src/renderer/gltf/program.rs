@@ -9,6 +9,7 @@ pub const ATTR_LOC_TEXCOORD_0: gl::types::GLuint = 3;
 pub const ATTR_LOC_TEXCOORD_1: gl::types::GLuint = 4;
 pub const ATTR_LOC_COLOR_0: gl::types::GLuint = 5;
 pub const ATTR_LOC_MODEL_TRANSFORM_COLUMNS: [gl::types::GLuint; 4] = [6, 7, 8, 9];
+pub const ATTR_LOC_TEXCOORD_TRANSFORM_COLUMNS: [gl::types::GLuint; 4] = [10, 11, 12, 13];
 
 pub const TEX_UNIT_BASE_COLOR: u32 = 0;
 pub const TEX_UNIT_METALLIC_ROUGHNESS: u32 = 1;

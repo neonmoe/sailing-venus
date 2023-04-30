@@ -87,7 +87,7 @@ void main() {
       texture(metallic_roughness_tex, tex_coords).rg;
   vec3 texel_normal = texture(normal_tex, tex_coords).rgb * 2.0 - 1.0;
   float texel_occlusion = texture(occlusion_tex, tex_coords).r;
-  vec3 texel_emissive = texture(emissive_tex, tex_coords).rgb;
+  vec4 texel_emissive = texture(emissive_tex, tex_coords);
 
   float pixel_alpha = texel_base_color.a * base_color_factor.a;
   if (pixel_alpha < 0.01)

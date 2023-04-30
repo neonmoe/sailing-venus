@@ -6,6 +6,7 @@ layout(location = 3) in vec2 TEXCOORD_0;
 layout(location = 4) in vec2 TEXCOORD_1;
 layout(location = 5) in vec3 COLOR_0;
 layout(location = 6) in mat4 MODEL_TRANSFORM;
+layout(location = 10) in mat4 TEXCOORD_TRANSFORM;
 
 out vec3 view_pos;
 out vec3 vertex_color;
@@ -28,6 +29,6 @@ void main() {
   vertex_normal = normalize(inverse_transpose_model_transfrom * NORMAL);
   vertex_tangent =
       vec4(normalize(mat3(view_from_model) * TANGENT.xyz), TANGENT.w);
-  tex_coords = TEXCOORD_0;
+  tex_coords = (TEXCOORD_TRANSFORM * vec4(TEXCOORD_0, 0.0, 1.0)).xy;
   gl_Position = proj_from_view * view_pos_full;
 }

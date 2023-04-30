@@ -34,6 +34,7 @@ pub struct DrawCall {
 #[derive(Default)]
 struct InstanceData {
     transforms: Vec<Mat4>,
+    texcoord_transforms: Vec<Mat4>,
     count: gl::types::GLsizei,
 }
 
@@ -53,7 +54,13 @@ impl DrawCalls {
         }
     }
 
-    pub fn add(&mut self, uniforms: &Uniforms, draw_call: &DrawCall, transform: Mat4) {
+    pub fn add(
+        &mut self,
+        uniforms: &Uniforms,
+        draw_call: &DrawCall,
+        transform: Mat4,
+        texcoord_transform: Mat4,
+    ) {
         let draw = if let Some(draw) = self.draws.get_mut(uniforms) {
             draw
         } else {
@@ -66,9 +73,14 @@ impl DrawCalls {
         };
         draw_call.count += 1;
         draw_call.transforms.push(transform);
+        draw_call.texcoord_transforms.push(texcoord_transform);
     }
 
-    pub fn draw(&mut self, model_transform_attrib_locations: [u32; 4]) {
+    pub fn draw(
+        &mut self,
+        model_transform_attrib_locations: [u32; 4],
+        texcoord_transform_attrib_locations: [u32; 4],
+    ) {
         for (uniforms, draw_calls) in &self.draws {
             let empty_draw = draw_calls
                 .values()
@@ -105,6 +117,25 @@ impl DrawCalls {
                 for i in 0..4 {
                     let attrib_location = model_transform_attrib_locations[i];
                     let offset = transforms_offset + mem::size_of::<Vec4>() * i;
+                    gl::call!(gl::EnableVertexAttribArray(attrib_location));
+                    gl::call!(gl::VertexAttribPointer(
+                        attrib_location,
+                        4,
+                        gl::FLOAT,
+                        gl::FALSE,
+                        mem::size_of::<Mat4>() as i32,
+                        ptr::null::<c_void>().add(offset)
+                    ));
+                    gl::call!(gl::VertexAttribDivisor(attrib_location, 1));
+                }
+                // Setup the texture coordinate transform vertex attribute
+                let tx_transforms = bytemuck::cast_slice(&instance_data.texcoord_transforms);
+                let (tx_transforms_buffer, tx_transforms_offset) =
+                    self.temp_buffer.allocate_buffer(tx_transforms);
+                gl::call!(gl::BindBuffer(gl::ARRAY_BUFFER, tx_transforms_buffer));
+                for i in 0..4 {
+                    let attrib_location = texcoord_transform_attrib_locations[i];
+                    let offset = tx_transforms_offset + mem::size_of::<Vec4>() * i;
                     gl::call!(gl::EnableVertexAttribArray(attrib_location));
                     gl::call!(gl::VertexAttribPointer(
                         attrib_location,

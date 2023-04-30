@@ -310,26 +310,15 @@ pub fn load_gltf(gltf: &str, resources: &[(&str, &[u8])]) -> gltf::Gltf {
         }
     }
 
-    let mut gl_textures = vec![0; images_json.len() + 3];
+    let mut gl_textures = vec![0; images_json.len() + 2];
     gl::call!(gl::GenTextures(
         gl_textures.len() as i32,
         gl_textures.as_mut_ptr()
     ));
     let white_tex = gl_textures[gl_textures.len() - 1];
     let normal_tex = gl_textures[gl_textures.len() - 2];
-    let black_tex = gl_textures[gl_textures.len() - 3];
-    let make_pixel_tex = |tex: u32, color: [u8; 3]| {
-        let target = gl::TEXTURE_2D;
-        let ifmt = gl::RGB as i32;
-        let fmt = gl::RGB;
-        let type_ = gl::UNSIGNED_BYTE;
-        let pixels = color.as_ptr() as *const c_void;
-        gl::call!(gl::BindTexture(target, tex));
-        gl::call!(gl::TexImage2D(target, 0, ifmt, 1, 1, 0, fmt, type_, pixels));
-    };
-    make_pixel_tex(white_tex, [0xFF, 0xFF, 0xFF]);
-    make_pixel_tex(normal_tex, [0x7F, 0x7F, 0xFF]);
-    make_pixel_tex(black_tex, [0, 0, 0]);
+    gl::write_1px_rgb_texture(white_tex, [0xFF, 0xFF, 0xFF]);
+    gl::write_1px_rgb_texture(normal_tex, [0x7F, 0x7F, 0xFF]);
     for (i, image) in images_json.into_iter().enumerate() {
         let Some(is_srgb) = is_srgb[i] else {
             continue; // Not used by any material.
@@ -418,26 +407,7 @@ pub fn load_gltf(gltf: &str, resources: &[(&str, &[u8])]) -> gltf::Gltf {
         gl_samplers.as_mut_ptr()
     ));
     let default_sampler = gl_samplers[gl_samplers.len() - 1];
-    gl::call!(gl::SamplerParameteri(
-        default_sampler,
-        gl::TEXTURE_MAG_FILTER,
-        gl::LINEAR as i32,
-    ));
-    gl::call!(gl::SamplerParameteri(
-        default_sampler,
-        gl::TEXTURE_MIN_FILTER,
-        gl::LINEAR_MIPMAP_LINEAR as i32,
-    ));
-    gl::call!(gl::SamplerParameteri(
-        default_sampler,
-        gl::TEXTURE_WRAP_S,
-        gl::REPEAT as i32,
-    ));
-    gl::call!(gl::SamplerParameteri(
-        default_sampler,
-        gl::TEXTURE_WRAP_T,
-        gl::REPEAT as i32,
-    ));
+    gl::setup_linear_sampler(default_sampler, false);
     for (i, sampler) in samplers_json.into_iter().enumerate() {
         let sampler = sampler.get::<HashMap<_, _>>().unwrap();
         gl::call!(gl::SamplerParameteri(
