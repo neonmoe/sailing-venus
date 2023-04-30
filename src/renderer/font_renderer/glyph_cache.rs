@@ -90,7 +90,7 @@ impl GlyphCache {
             self.cursor.0 += width + 1;
         } else {
             self.cursor.0 = 0;
-            self.cursor.1 += self.max_height_this_row;
+            self.cursor.1 += self.max_height_this_row + 1;
             self.max_height_this_row = 0;
         }
         self.max_height_this_row = self.max_height_this_row.max(height);

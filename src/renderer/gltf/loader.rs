@@ -494,13 +494,6 @@ pub fn load_gltf(gltf: &str, resources: &[(&str, &[u8])]) -> gltf::Gltf {
             light_node_index += 1;
         }
     }
-    let lights_uniform_block = {
-        let lights_data = [lights];
-        let lights_data = bytemuck::cast_slice(&lights_data);
-        let (ubo, ubo_offset) = uniform_buffer_allocator.allocate_buffer(lights_data);
-        let ubo_size = lights_data.len();
-        (gltf::UNIFORM_BLOCK_LIGHTS, ubo, ubo_offset, ubo_size)
-    };
 
     let materials_json = gltf["materials"].get::<Vec<_>>().unwrap();
     let mut materials = Vec::with_capacity(materials_json.len());
@@ -604,14 +597,17 @@ pub fn load_gltf(gltf: &str, resources: &[(&str, &[u8])]) -> gltf::Gltf {
         let material_data = bytemuck::cast_slice(&material_data);
         let (ubo, ubo_offset) = uniform_buffer_allocator.allocate_buffer(material_data);
         let ubo_size = material_data.len();
-        let ubos = [
-            Some((gltf::UNIFORM_BLOCK_MATERIAL, ubo, ubo_offset, ubo_size)),
-            Some(lights_uniform_block), // this index is depended on in Gltf::copy_lights_from
-        ];
+        let ubos = [Some((
+            gltf::UNIFORM_BLOCK_MATERIAL,
+            ubo,
+            ubo_offset,
+            ubo_size,
+        ))];
 
         materials.push(gltf::Material {
             name: material["name"].get::<String>().unwrap().clone(),
             uniforms: Uniforms { textures, ubos },
+            lights,
         });
     }
 

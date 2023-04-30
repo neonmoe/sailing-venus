@@ -15,6 +15,8 @@ pub struct ShipGame {
 pub struct Room {
     pub room_type: RoomType,
     pub position: Vec2,
+    /// The area where characters are considered to be in the room. Relative to `position`.
+    pub room_bounds: Aabb2,
     /// The area where characters are considered to be working in
     /// this room (unless they're moving through). Relative to `position`.
     pub working_area_bounds: Aabb2,
@@ -31,6 +33,7 @@ pub struct Character {
     pub move_target_queue: VecDeque<Vec2>,
     pub move_speed: f32,
     pub look_dir: Vec2,
+    pub current_room: usize,
 }
 
 impl ShipGame {
@@ -40,12 +43,14 @@ impl ShipGame {
                 Room {
                     room_type: RoomType::Navigation,
                     position: Vec2::ZERO,
+                    room_bounds: Aabb2::new(Vec2::ONE * -4.0, Vec2::ONE * 4.0),
                     working_area_bounds: Aabb2::new(Vec2::new(1.0, -3.0), Vec2::new(4.0, 3.0)),
                     currently_working_characters: Vec::new(),
                 },
                 Room {
-                    room_type: RoomType::Empty,
+                    room_type: RoomType::Navigation,
                     position: Vec2::new(0.0, -9.0),
+                    room_bounds: Aabb2::new(Vec2::ONE * -4.0, Vec2::ONE * 4.0),
                     working_area_bounds: Aabb2::new(Vec2::ZERO, Vec2::ZERO),
                     currently_working_characters: Vec::new(),
                 },
@@ -55,6 +60,7 @@ impl ShipGame {
                 move_target_queue: VecDeque::new(),
                 move_speed: 5.0,
                 look_dir: Vec2::new(1.0, 0.0),
+                current_room: 0,
             }],
             selected_character: Some(0),
         }
@@ -90,9 +96,14 @@ impl ShipGame {
 
         for room in &mut self.rooms {
             room.currently_working_characters.clear();
-            for (i, char_pos) in self.characters.iter().map(|c| c.position).enumerate() {
-                if room.working_area_bounds.contains(char_pos) {
+            let bounds = room.room_bounds.offset(room.position);
+            let working_bounds = room.working_area_bounds.offset(room.position);
+            for (i, c) in self.characters.iter_mut().enumerate() {
+                if working_bounds.contains(c.position) {
                     room.currently_working_characters.push(i);
+                }
+                if bounds.contains(c.position) {
+                    c.current_room = i;    
                 }
             }
         }

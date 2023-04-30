@@ -51,8 +51,8 @@ vec3 diffuse_brdf(vec3 color) { return color / PI; }
 // There's no basis or source for any of this, except the idea of dotting the
 // reflected direction with the view direction. I just want some speculars.
 float specular(vec3 reflected_dir, vec3 view_dir, float shininess) {
-  return pow(max(0.0, dot(reflected_dir, view_dir)), shininess * 30.0) *
-         pow(shininess, 2.0);
+  return pow(max(0.0, dot(reflected_dir, view_dir)), shininess * 200.0) *
+         pow(shininess, 2.0) * 2.0;
 }
 
 void get_incoming_light(inout vec3 out_diffuse, inout vec3 out_specular,
@@ -69,7 +69,7 @@ void get_incoming_light(inout vec3 out_diffuse, inout vec3 out_specular,
   vec3 light_dir = normalize(to_light);
   float distance_squared = dot(to_light, to_light);
 
-  float light_power = light_intensity_params[light_index].x / 1500.0;
+  float light_power = light_intensity_params[light_index].x / 2500.0;
   float k_diffuse = max(0.0, dot(normal, light_dir));
   float k_specular = 0.0;
   if (k_diffuse > 0.0) {
@@ -104,6 +104,7 @@ void main() {
   vec3 pixel_normal =
       normalize(mat3(vertex_tangent.xyz, vertex_bitangent, vertex_normal) *
                 tangent_space_normal);
+  pixel_normal = vertex_normal;
 
   float pixel_occlusion = 1.0 + material_params.w * (texel_occlusion - 1.0);
   vec3 light_emitted = texel_emissive.rgb * emissive_factor.rgb;

@@ -167,10 +167,7 @@ impl Renderer {
 
         // TODO: draw_call collect, proj+view matrix, draw_call draw just for the UI
         // TODO: 2D UI can just use glTF and an orthographic projection
-        self.dashboard.draw(
-            &mut self.ui_draw_calls,
-            Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
-        );
+        self.dashboard.draw(&mut self.ui_draw_calls, Mat4::IDENTITY);
 
         for (i, text) in ["NAVIGATION", "SCHEDULE", "DELIVERIES", "OPTIONS"]
             .iter()
@@ -182,18 +179,20 @@ impl Renderer {
                 text,
                 Vec2::new(-270.0, y),
                 9.0,
-                20.0,
+                (20.0, scale),
                 (HorizontalAlign::Left, VerticalAlign::Middle),
+                None,
             );
         }
 
         self.text.draw_text(
             &mut self.ui_draw_calls,
-            "Some text here too.",
+            &format!("Some text here too. The scale is currently: {scale:.1} with width {width}"),
             Vec2::new(-30.0, 125.0),
             9.0,
-            16.0,
+            (16.0, scale),
             (HorizontalAlign::Left, VerticalAlign::Top),
+            Some(320.0),
         );
 
         // Text rendering:

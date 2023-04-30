@@ -33,7 +33,7 @@ pub struct UniformBlockMaterial {
     pub emissive_factor: Vec4,
 }
 
-#[derive(Clone, Copy, Zeroable, Pod)]
+#[derive(Clone, Copy, PartialEq, Zeroable, Pod)]
 #[repr(C)]
 pub struct UniformBlockLights {
     /// w: 0.0 as the null terminator, 1.0: directional, 2.0: point, 3.0: spot,

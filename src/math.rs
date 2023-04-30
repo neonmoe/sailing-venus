@@ -20,6 +20,10 @@ impl Aabb2 {
     pub fn contains(&self, point: Vec2) -> bool {
         self.min.cmple(point).all() && self.max.cmpgt(point).all()
     }
+
+    pub fn offset(&self, by: Vec2) -> Aabb2 {
+        Aabb2::new(self.min + by, self.max + by)
+    }
 }
 
 #[cfg(test)]

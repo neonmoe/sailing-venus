@@ -3,7 +3,7 @@ use crate::renderer::draw_calls::{DrawCall, Uniforms};
 use crate::renderer::{gl, gltf, DrawCalls};
 use bytemuck::Zeroable;
 use fontdue::layout::{
-    CoordinateSystem, HorizontalAlign, Layout, LayoutSettings, TextStyle, VerticalAlign,
+    CoordinateSystem, HorizontalAlign, Layout, LayoutSettings, TextStyle, VerticalAlign, WrapStyle,
 };
 use fontdue::{Font, FontSettings};
 use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
@@ -121,14 +121,12 @@ impl FontRenderer {
         let mat_bytes = bytemuck::cast_slice(&material);
         let mat_size = mat_bytes.len();
         let (mat_buf, mat_off) = allocator.allocate_buffer(mat_bytes);
-        let lights = [gltf::UniformBlockLights::zeroed()];
-        let lgt_bytes = bytemuck::cast_slice(&lights);
-        let lgt_size = lgt_bytes.len();
-        let (lgt_buf, lgt_off) = allocator.allocate_buffer(lgt_bytes);
-        let ubos = [
-            Some((gltf::UNIFORM_BLOCK_MATERIAL, mat_buf, mat_off, mat_size)),
-            Some((gltf::UNIFORM_BLOCK_LIGHTS, lgt_buf, lgt_off, lgt_size)),
-        ];
+        let ubos = [Some((
+            gltf::UNIFORM_BLOCK_MATERIAL,
+            mat_buf,
+            mat_off,
+            mat_size,
+        ))];
         let glyph_uniforms = Uniforms { textures, ubos };
 
         let montserrat =
@@ -163,15 +161,16 @@ impl FontRenderer {
         text: &str,
         pos: Vec2,
         depth: f32,
-        px: f32,
+        (px, scale): (f32, f32),
         (h_align, v_align): (HorizontalAlign, VerticalAlign),
+        max_width: Option<f32>,
     ) {
-        let scale = 2.0;
         self.layout.reset(&LayoutSettings {
             x: pos.x * scale,
             y: pos.y * scale,
             horizontal_align: h_align,
             vertical_align: v_align,
+            max_width: max_width.map(|f| f * scale),
             ..Default::default()
         });
         let style = TextStyle {
@@ -194,8 +193,10 @@ impl FontRenderer {
                 Vec3::new(glyph.x, glyph.y, depth) / scale,
             );
             draw_calls.add(
+                None,
                 &self.glyph_uniforms,
                 &self.glyph_draw_call,
+                transform,
                 transform,
                 texcoord_transform,
             );

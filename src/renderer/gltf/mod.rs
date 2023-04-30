@@ -49,24 +49,12 @@ pub struct Primitive {
 pub struct Material {
     pub name: String,
     pub uniforms: Uniforms,
+    pub lights: UniformBlockLights,
 }
 
 impl Gltf {
     pub fn draw(&self, draw_calls: &mut DrawCalls, model_transform: Mat4) {
         self._draw(draw_calls, model_transform, |i| self.nodes[i].transform)
-    }
-
-    pub fn copy_lights_from(&mut self, other: &Gltf) {
-        // TODO: Why doesn't this work?
-        for (material, other) in self.materials.iter_mut().zip(other.materials.iter()) {
-            material.uniforms.ubos[1] = other.uniforms.ubos[1].clone();
-        }
-    }
-
-    pub fn transform_lights(&mut self) {
-        // TODO: Hold the original lights somewhere
-        // TODO: Update ubo with newly transformed lights
-        todo!();
     }
 
     pub fn draw_animated(
@@ -98,13 +86,20 @@ impl Gltf {
             if let Some(mesh_index) = self.nodes[node_index].mesh_index {
                 for &primitive_index in &self.meshes[mesh_index].primitive_indices {
                     let primitive = &self.primitives[primitive_index];
-                    let uniforms = &self.materials[primitive.material_index].uniforms;
+                    let material = &self.materials[primitive.material_index];
                     let mut draw_call = primitive.draw_call.clone();
                     // glTF spec section 3.7.4:
                     draw_call.front_face = (transform.determinant() > 0.0)
                         .then_some(gl::CCW)
                         .unwrap_or(gl::CW);
-                    draw_calls.add(uniforms, &draw_call, transform, Mat4::IDENTITY);
+                    draw_calls.add(
+                        Some(&material.lights),
+                        &material.uniforms,
+                        &draw_call,
+                        model_transform,
+                        transform,
+                        Mat4::IDENTITY,
+                    );
                 }
             }
             for &child_index in &self.nodes[node_index].child_node_indices {

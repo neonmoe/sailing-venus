@@ -1,5 +1,6 @@
 use crate::renderer::bumpalloc_buffer::BumpAllocatedBuffer;
-use crate::renderer::gl;
+use crate::renderer::{gl, gltf};
+use bytemuck::Zeroable;
 use glam::{Mat4, Vec4};
 use std::collections::HashMap;
 use std::ffi::c_void;
@@ -12,7 +13,7 @@ pub struct Uniforms {
     pub textures: [Option<(u32, u32, u32)>; 5],
     /// The OpenGL uniform buffers `buffer` to bind at indices `i`, where each
     /// element of this array is `(i, buffer, offset, size)`.
-    pub ubos: [Option<(u32, u32, usize, usize)>; 2],
+    pub ubos: [Option<(u32, u32, usize, usize)>; 1],
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -44,6 +45,8 @@ struct InstanceData {
 pub struct DrawCalls {
     draws: HashMap<Uniforms, HashMap<DrawCall, InstanceData>>,
     temp_buffer: BumpAllocatedBuffer,
+    lights_ubo: gltf::UniformBlockLights,
+    lights_count: usize,
 }
 
 impl DrawCalls {
@@ -51,16 +54,52 @@ impl DrawCalls {
         DrawCalls {
             draws: HashMap::new(),
             temp_buffer: BumpAllocatedBuffer::new(gl::ARRAY_BUFFER, gl::STREAM_DRAW),
+            lights_ubo: gltf::UniformBlockLights::zeroed(),
+            lights_count: 0,
         }
     }
 
     pub fn add(
         &mut self,
+        lights: Option<&gltf::UniformBlockLights>,
         uniforms: &Uniforms,
         draw_call: &DrawCall,
-        transform: Mat4,
+        model_transfrom: Mat4,
+        primitive_transfrom: Mat4,
         texcoord_transform: Mat4,
     ) {
+        if let Some(lights) = lights {
+            for i in 0..gltf::MAX_LIGHTS {
+                if lights.color_and_kind[i].w == 0.0 {
+                    break;
+                }
+                let light_position = model_transfrom * lights.position[i];
+                let light_direction = model_transfrom * lights.direction[i];
+                let mut included = false;
+                for j in 0..self.lights_count {
+                    if lights.color_and_kind[i] == self.lights_ubo.color_and_kind[j]
+                        && light_position == self.lights_ubo.position[j]
+                        && lights.intensity_params[i] == self.lights_ubo.intensity_params[j]
+                        && light_direction == self.lights_ubo.direction[j]
+                    {
+                        included = true;
+                        break;
+                    }
+                }
+                if !included {
+                    if self.lights_count >= gltf::MAX_LIGHTS {
+                        debug_assert!(false, "scene lights overflowed");
+                        break;
+                    }
+                    self.lights_ubo.color_and_kind[self.lights_count] = lights.color_and_kind[i];
+                    self.lights_ubo.intensity_params[self.lights_count] =
+                        lights.intensity_params[i];
+                    self.lights_ubo.position[self.lights_count] = light_position;
+                    self.lights_ubo.direction[self.lights_count] = light_direction;
+                    self.lights_count += 1;
+                }
+            }
+        }
         let draw = if let Some(draw) = self.draws.get_mut(uniforms) {
             draw
         } else {
@@ -72,7 +111,7 @@ impl DrawCalls {
             draw.entry(draw_call.clone()).or_default()
         };
         draw_call.count += 1;
-        draw_call.transforms.push(transform);
+        draw_call.transforms.push(primitive_transfrom);
         draw_call.texcoord_transforms.push(texcoord_transform);
     }
 
@@ -81,6 +120,17 @@ impl DrawCalls {
         model_transform_attrib_locations: [u32; 4],
         texcoord_transform_attrib_locations: [u32; 4],
     ) {
+        let lights = [self.lights_ubo];
+        let lights = bytemuck::cast_slice(&lights);
+        let (lights_buf, lights_off) = self.temp_buffer.allocate_buffer(lights);
+        gl::call!(gl::BindBufferRange(
+            gl::UNIFORM_BUFFER,
+            gltf::UNIFORM_BLOCK_LIGHTS,
+            lights_buf,
+            lights_off as isize,
+            lights.len() as isize,
+        ));
+
         for (uniforms, draw_calls) in &self.draws {
             let empty_draw = draw_calls
                 .values()
@@ -173,9 +223,14 @@ impl DrawCalls {
         for draw_calls in self.draws.values_mut() {
             for instance_data in draw_calls.values_mut() {
                 instance_data.transforms.clear();
+                instance_data.texcoord_transforms.clear();
                 instance_data.count = 0;
             }
         }
         self.temp_buffer.clear();
+        for i in 0..self.lights_count {
+            self.lights_ubo.color_and_kind[i].w = 0.0;
+        }
+        self.lights_count = 0;
     }
 }
