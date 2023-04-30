@@ -32,7 +32,7 @@ pub struct Renderer {
     ship: gltf::Gltf,
     room: gltf::Gltf,
     character: gltf::Gltf,
-    button: gltf::Gltf,
+    dashboard: gltf::Gltf,
 }
 
 impl Renderer {
@@ -40,7 +40,7 @@ impl Renderer {
         let ship = gltf::load_glb(include_bytes!("../../resources/models/ship.glb"));
         let room = gltf::load_glb(include_bytes!("../../resources/models/room.glb"));
         let character = gltf::load_glb(include_bytes!("../../resources/models/character.glb"));
-        let button = gltf::load_glb(include_bytes!("../../resources/models/button.glb"));
+        let dashboard = gltf::load_glb(include_bytes!("../../resources/models/dashboard.glb"));
         Renderer {
             gltf_shader: gltf::create_program(),
             draw_calls: DrawCalls::new(),
@@ -50,7 +50,7 @@ impl Renderer {
             ship,
             room,
             character,
-            button,
+            dashboard,
         }
     }
 
@@ -154,6 +154,9 @@ impl Renderer {
 
         // Render UI:
 
+        let scale = (width / 800.0).floor().max(1.0);
+        let width = width / scale;
+        let height = height / scale;
         self.ui_draw_calls.clear();
 
         gl::call!(gl::Enable(gl::BLEND));
@@ -162,24 +165,35 @@ impl Renderer {
         gl::call!(gl::Clear(gl::DEPTH_BUFFER_BIT));
         gl::call!(gl::DepthFunc(gl::LESS));
 
-        // for easier hud debugging
-        gl::call!(gl::ClearColor(0.4, 0.4, 0.4, 1.0));
-        gl::call!(gl::Clear(gl::COLOR_BUFFER_BIT));
-
         // TODO: draw_call collect, proj+view matrix, draw_call draw just for the UI
         // TODO: 2D UI can just use glTF and an orthographic projection
-        self.button.draw(
+        self.dashboard.draw(
             &mut self.ui_draw_calls,
-            Mat4::from_translation(Vec3::new(100.0, 100.0, 0.5)),
+            Mat4::from_translation(Vec3::new(0.0, 0.0, 0.0)),
         );
+
+        for (i, text) in ["NAVIGATION", "SCHEDULE", "DELIVERIES", "OPTIONS"]
+            .iter()
+            .enumerate()
+        {
+            let y = 132.0 - i as f32 * 29.5;
+            self.text.draw_text(
+                &mut self.ui_draw_calls,
+                text,
+                Vec2::new(-270.0, y),
+                9.0,
+                20.0,
+                (HorizontalAlign::Left, VerticalAlign::Middle),
+            );
+        }
 
         self.text.draw_text(
             &mut self.ui_draw_calls,
-            "Hello, world!",
-            Vec2::new(100.0, 150.0),
-            0.0,
-            28.0,
-            (HorizontalAlign::Left, VerticalAlign::Bottom),
+            "Some text here too.",
+            Vec2::new(-30.0, 125.0),
+            9.0,
+            16.0,
+            (HorizontalAlign::Left, VerticalAlign::Top),
         );
 
         // Text rendering:
@@ -190,7 +204,8 @@ impl Renderer {
         // the quad can be defined completely ahead-of-time as a single triangle, pretty sure
 
         let ui_proj_matrix =
-            Mat4::orthographic_rh_gl(0.0, width, 0.0, height, -10.0, 10.0).to_cols_array();
+            Mat4::orthographic_rh_gl(-width / 2.0, width / 2.0, 0.0, height, -100.0, 100.0)
+                .to_cols_array();
         let ui_view_matrix = Mat4::IDENTITY.to_cols_array();
         gl::call!(gl::UseProgram(self.gltf_shader.program));
         gl::call!(gl::UniformMatrix4fv(

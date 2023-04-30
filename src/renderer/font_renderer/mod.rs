@@ -136,7 +136,10 @@ impl FontRenderer {
                 &include_bytes!(
                     "../../../resources/fonts/montserrat/static/Montserrat-SemiBold.ttf"
                 )[..],
-                FontSettings::default(),
+                FontSettings {
+                    collection_index: 0,
+                    scale: 36.0,
+                },
             )
             .unwrap();
         let layout = Layout::new(CoordinateSystem::PositiveYUp);
@@ -163,16 +166,17 @@ impl FontRenderer {
         px: f32,
         (h_align, v_align): (HorizontalAlign, VerticalAlign),
     ) {
+        let scale = 2.0;
         self.layout.reset(&LayoutSettings {
-            x: pos.x,
-            y: pos.y,
+            x: pos.x * scale,
+            y: pos.y * scale,
             horizontal_align: h_align,
             vertical_align: v_align,
             ..Default::default()
         });
         let style = TextStyle {
             text,
-            px,
+            px: px * scale,
             font_index: 0,
             user_data: (),
         };
@@ -185,9 +189,9 @@ impl FontRenderer {
                 Vec3::new(texcoord.x, texcoord.y, 0.0),
             );
             let transform = Mat4::from_scale_rotation_translation(
-                Vec3::new(glyph.width as f32, glyph.height as f32, 1.0),
+                Vec3::new(glyph.width as f32, glyph.height as f32, 1.0) / scale,
                 Quat::IDENTITY,
-                Vec3::new(glyph.x, glyph.y, depth),
+                Vec3::new(glyph.x, glyph.y, depth) / scale,
             );
             draw_calls.add(
                 &self.glyph_uniforms,

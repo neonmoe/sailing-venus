@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ffi::c_void, ptr};
+use std::{collections::HashMap, ffi::c_void};
 
 use crate::renderer::gl;
 use fontdue::{
