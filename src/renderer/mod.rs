@@ -39,7 +39,7 @@ impl Renderer {
     pub fn new() -> Renderer {
         let ship = gltf::load_glb(include_bytes!("../../resources/models/ship.glb"));
         let room = gltf::load_glb(include_bytes!("../../resources/models/room.glb"));
-        let character = gltf::load_glb(include_bytes!("../../resources/models/character.glb"));
+        let character = gltf::load_glb(include_bytes!("../../resources/models/sailor.glb"));
         let dashboard = gltf::load_glb(include_bytes!("../../resources/models/dashboard.glb"));
         Renderer {
             gltf_shader: gltf::create_program(),

@@ -104,12 +104,11 @@ void main() {
   vec3 pixel_normal =
       normalize(mat3(vertex_tangent.xyz, vertex_bitangent, vertex_normal) *
                 tangent_space_normal);
-  pixel_normal = vertex_normal;
 
   float pixel_occlusion = 1.0 + material_params.w * (texel_occlusion - 1.0);
   vec3 light_emitted = texel_emissive.rgb * emissive_factor.rgb;
 
-  float ambient_brightness = 0.2 * pixel_occlusion;
+  float ambient_brightness = 0.1 * pixel_occlusion;
   // Just to give a little shape to everything
   float ambient_fudge = -max(0.0, dot(-VIEW_VECTOR, pixel_normal)) * 0.1;
   vec3 light_diffuse = vec3(ambient_brightness + ambient_fudge);
