@@ -35,7 +35,8 @@ pub struct Renderer {
 
     debug_arrow: gltf::Gltf,
     ship: gltf::Gltf,
-    pub room: gltf::Gltf,
+    pub room_sailing: gltf::Gltf,
+    pub room_navigation: gltf::Gltf,
     characters: [gltf::Gltf; Job::Count as usize],
     dashboard: gltf::Gltf,
     pixel_gray: gltf::Gltf,
@@ -46,7 +47,10 @@ impl Renderer {
     pub fn new() -> Renderer {
         let debug_arrow = gltf::load_glb(include_bytes!("../../resources/models/debug_arrow.glb"));
         let ship = gltf::load_glb(include_bytes!("../../resources/models/ship.glb"));
-        let room = gltf::load_glb(include_bytes!("../../resources/models/room.glb"));
+        let room_sailing =
+            gltf::load_glb(include_bytes!("../../resources/models/room_sailing.glb"));
+        let room_navigation =
+            gltf::load_glb(include_bytes!("../../resources/models/room_navigation.glb"));
         let navigator = gltf::load_glb(include_bytes!("../../resources/models/navigator.glb"));
         let sailor = gltf::load_glb(include_bytes!("../../resources/models/sailor.glb"));
         let dashboard = gltf::load_glb(include_bytes!("../../resources/models/dashboard.glb"));
@@ -60,7 +64,8 @@ impl Renderer {
             text: font_renderer::FontRenderer::new(),
             debug_arrow,
             ship,
-            room,
+            room_sailing,
+            room_navigation,
             characters: [navigator, sailor],
             dashboard,
             pixel_gray,
@@ -109,7 +114,7 @@ impl Renderer {
 
     pub fn zoom_camera(&mut self, pixels: i32) {
         // TODO: Add camera zoom sensitivity
-        self.camera.distance = (self.camera.distance - pixels as f32 * 10.0).clamp(10.0, 50.0);
+        self.camera.distance = (self.camera.distance - pixels as f32 * 10.0).clamp(10.0, 100.0);
     }
 
     pub fn render(
@@ -126,11 +131,12 @@ impl Renderer {
         for room in &ship_game.rooms {
             let position = Vec3::new(room.position.x, 0.0, room.position.y);
             match room.room_type {
-                RoomType::Navigation | RoomType::Sails => {
-                    // TODO: Room models
-                    self.room
-                        .draw(&mut self.draw_calls, Mat4::from_translation(position));
-                }
+                RoomType::Navigation => self
+                    .room_navigation
+                    .draw(&mut self.draw_calls, Mat4::from_translation(position)),
+                RoomType::Sails => self
+                    .room_sailing
+                    .draw(&mut self.draw_calls, Mat4::from_translation(position)),
             }
         }
         for character in &ship_game.characters {
@@ -143,7 +149,8 @@ impl Renderer {
         }
         self.ship.draw(&mut self.draw_calls, Mat4::IDENTITY);
 
-        if cfg!(debug_assertions) {
+        let pathfinding_debug_arrows = false;
+        if cfg!(debug_assertions) && pathfinding_debug_arrows {
             let to_3d = |vec2: &IVec2| Vec3::new(vec2.x as f32 + 0.5, 0.5, vec2.y as f32 + 0.5);
             for (debug_arrow, neighbors) in &ship_game.pf_map {
                 let debug_arrow = to_3d(debug_arrow);
@@ -164,7 +171,7 @@ impl Renderer {
         }
 
         gl::call!(gl::Disable(gl::BLEND));
-        gl::call!(gl::ClearColor(0.1, 0.1, 0.1, 1.0));
+        gl::call!(gl::ClearColor(0.6, 0.45, 0.3, 1.0));
         gl::call!(gl::ClearDepthf(0.0));
         gl::call!(gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT));
         gl::call!(gl::Enable(gl::CULL_FACE));
@@ -391,7 +398,7 @@ impl Renderer {
 
         let view_matrix = self.camera.view_matrix();
         let proj_matrix =
-            Mat4::perspective_rh_gl(20f32.to_radians(), aspect_ratio, 100.0, 0.3) * to_opengl_basis;
+            Mat4::perspective_rh_gl(20f32.to_radians(), aspect_ratio, 200.0, 0.3) * to_opengl_basis;
         (view_matrix, proj_matrix)
     }
 }

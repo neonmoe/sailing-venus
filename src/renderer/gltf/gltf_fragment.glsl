@@ -104,6 +104,7 @@ void main() {
   vec3 pixel_normal =
       normalize(mat3(vertex_tangent.xyz, vertex_bitangent, vertex_normal) *
                 tangent_space_normal);
+  pixel_normal = vertex_normal;
 
   float pixel_occlusion = 1.0 + material_params.w * (texel_occlusion - 1.0);
   vec3 light_emitted = texel_emissive.rgb * emissive_factor.rgb;

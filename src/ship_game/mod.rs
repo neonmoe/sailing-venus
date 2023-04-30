@@ -10,6 +10,7 @@ mod room;
 pub use room::*;
 
 pub type PathfindingMap = HashMap<IVec2, Vec<IVec2>>;
+const SLEEPING_COORDS: Vec2 = Vec2::new(-2.5, -9.5);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Task {
@@ -62,13 +63,13 @@ impl ShipGame {
             Room::new(
                 &renderer,
                 RoomType::Navigation,
-                Vec2::ZERO,
+                Vec2::new(0.0, -4.0),
                 &mut pathfinding_neighbors,
             ),
             Room::new(
                 &renderer,
                 RoomType::Sails,
-                Vec2::new(0.0, -9.0),
+                Vec2::new(0.0, 5.0),
                 &mut pathfinding_neighbors,
             ),
         ];
@@ -78,7 +79,7 @@ impl ShipGame {
             pf_map: pathfinding_neighbors,
             characters: vec![
                 Character {
-                    position: Vec2::new(-3.5, -3.5),
+                    position: SLEEPING_COORDS,
                     move_target_queue: VecDeque::new(),
                     move_speed: 5.0,
                     look_dir: Vec2::new(1.0, 0.0),
@@ -87,7 +88,7 @@ impl ShipGame {
                     job: Job::Navigator,
                 },
                 Character {
-                    position: Vec2::new(-3.5, -3.5),
+                    position: SLEEPING_COORDS,
                     move_target_queue: VecDeque::new(),
                     move_speed: 5.0,
                     look_dir: Vec2::new(1.0, 0.0),
@@ -109,8 +110,8 @@ impl ShipGame {
                 // Not doing anything, queue something to do
                 match character.schedule[current_hour] {
                     Task::Sleep => {
-                        if character.position != Vec2::new(-3.5, -3.5) {
-                            character.pathfind_to(&self.pf_map, Vec2::new(-3.5, -3.5));
+                        if character.position != SLEEPING_COORDS {
+                            character.pathfind_to(&self.pf_map, SLEEPING_COORDS);
                         }
                     }
                     Task::Work => {
@@ -131,8 +132,7 @@ impl ShipGame {
                                 character.pathfind_to(&self.pf_map, target);
                             }
                         } else {
-                            // TODO: Bedrooms?
-                            character.pathfind_to(&self.pf_map, Vec2::new(-3.5, -3.5));
+                            character.pathfind_to(&self.pf_map, SLEEPING_COORDS);
                         }
                     }
                 }

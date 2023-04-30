@@ -31,7 +31,12 @@ impl Room {
         pathfinding_neighbors: &mut HashMap<IVec2, Vec<IVec2>>,
     ) -> Room {
         let pathfinding_nodes = match room_type {
-            RoomType::Navigation | RoomType::Sails => get_pathfinding_nodes(&renderer.room),
+            RoomType::Navigation => get_pathfinding_nodes(&renderer.room_navigation),
+            RoomType::Sails => get_pathfinding_nodes(&renderer.room_sailing),
+        };
+        let working_area_bounds = match room_type {
+            RoomType::Navigation => Aabb2::new(Vec2::new(2.0, 0.0), Vec2::new(3.0, 1.0)),
+            RoomType::Sails => Aabb2::new(Vec2::new(-2.0, 0.0), Vec2::new(-1.0, 1.0)),
         };
         let ipos = position.floor().as_ivec2();
         let nodes_set: HashSet<IVec2> =
@@ -66,7 +71,7 @@ impl Room {
             room_type,
             position,
             room_bounds: Aabb2::new(Vec2::ONE * -4.0, Vec2::ONE * 4.0),
-            working_area_bounds: Aabb2::new(Vec2::new(1.0, -3.0), Vec2::new(4.0, 3.0)),
+            working_area_bounds,
             currently_working_characters: Vec::new(),
         }
     }
