@@ -1,9 +1,8 @@
 use crate::renderer::bumpalloc_buffer::BumpAllocatedBuffer;
 use crate::renderer::draw_calls::{DrawCall, Uniforms};
 use crate::renderer::{gl, gltf, DrawCalls};
-use bytemuck::Zeroable;
 use fontdue::layout::{
-    CoordinateSystem, HorizontalAlign, Layout, LayoutSettings, TextStyle, VerticalAlign, WrapStyle,
+    CoordinateSystem, HorizontalAlign, Layout, LayoutSettings, TextStyle, VerticalAlign,
 };
 use fontdue::{Font, FontSettings};
 use glam::{Mat4, Quat, Vec2, Vec3, Vec4};

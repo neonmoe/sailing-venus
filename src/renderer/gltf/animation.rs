@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::renderer::gltf::Gltf;
 use glam::{Mat4, Quat, Vec3};
 

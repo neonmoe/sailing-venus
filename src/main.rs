@@ -1,6 +1,7 @@
 use anyhow::Context;
 use glam::Vec2;
 use sdl2::event::{Event, WindowEvent};
+use sdl2::keyboard::Keycode;
 use sdl2::mouse::{MouseButton, MouseWheelDirection};
 use sdl2::rect::Point;
 use sdl2::sys::{SDL_Event, SDL_EventType, SDL_KeyCode};
@@ -15,10 +16,12 @@ use std::time::Instant;
 
 #[cfg(target_family = "wasm")]
 mod emscripten_h;
+mod interface;
 mod math;
 mod renderer;
 mod ship_game;
 
+use interface::Interface;
 use renderer::Renderer;
 use ship_game::ShipGame;
 
@@ -98,6 +101,14 @@ fn _main() -> anyhow::Result<()> {
                     // Here, we specifically "unignore"
                     if keycode == SDL_KeyCode::SDLK_SPACE as i32 {
                         ACCEPTED
+                    } else if keycode == SDL_KeyCode::SDLK_1 as i32 {
+                        ACCEPTED
+                    } else if keycode == SDL_KeyCode::SDLK_2 as i32 {
+                        ACCEPTED
+                    } else if keycode == SDL_KeyCode::SDLK_3 as i32 {
+                        ACCEPTED
+                    } else if keycode == SDL_KeyCode::SDLK_4 as i32 {
+                        ACCEPTED
                     } else {
                         DROPPED
                     }
@@ -141,26 +152,34 @@ struct State {
     lmouse_pressed: bool,
     rmouse_pressed: bool,
     mouse_position: Point,
+    ship_space_mouse_position: Vec2,
     accumulated_mouse_rel: (i32, i32),
     renderer: Renderer,
     time: f32,
     last_frame: Instant,
     ship_game: ShipGame,
+    interface: Interface,
+    debug_time_speedup: bool,
 }
 
 impl State {
     pub fn new(window: Window, event_pump: EventPump) -> State {
+        let renderer = Renderer::new();
+        let ship_game = ShipGame::new(&renderer);
         State {
-            renderer: Renderer::new(),
+            renderer,
             window,
             event_pump,
             lmouse_pressed: false,
             rmouse_pressed: false,
             mouse_position: Point::new(0, 0),
+            ship_space_mouse_position: Vec2::ZERO,
             accumulated_mouse_rel: (0, 0),
             time: 0.0,
             last_frame: Instant::now(),
-            ship_game: ShipGame::new(),
+            ship_game,
+            interface: Interface::new(),
+            debug_time_speedup: false,
         }
     }
 }
@@ -171,12 +190,15 @@ extern "C" fn run_frame() {
         lmouse_pressed,
         rmouse_pressed,
         mouse_position,
+        ship_space_mouse_position,
         accumulated_mouse_rel,
         renderer,
         window,
         time,
         last_frame,
         ship_game,
+        interface,
+        debug_time_speedup,
         ..
     } = unsafe { &mut STATE }.as_mut().unwrap();
 
@@ -199,8 +221,10 @@ extern "C" fn run_frame() {
                     let mut clip_coords =
                         Vec2::new(x as f32 / w as f32, y as f32 / h as f32) * 2.0 - Vec2::ONE;
                     clip_coords.y *= -1.0;
-                    let pos = renderer.clip_to_ship_space(clip_coords, w as f32 / h as f32);
-                    ship_game.click(pos);
+                    *ship_space_mouse_position =
+                        renderer.clip_to_ship_space(clip_coords, w as f32 / h as f32);
+
+                    interface.click(Point::new(x, y), ship_game, false);
                 }
                 MouseButton::Right => *rmouse_pressed = true,
                 _ => {}
@@ -226,11 +250,16 @@ extern "C" fn run_frame() {
                 }
                 if *lmouse_pressed {
                     // Look movement
-                    let threshold = 25i32.pow(2);
+                    let threshold = 10i32.pow(2);
                     let (acc_x, acc_y) = accumulated_mouse_rel;
                     if acc_x.pow(2) + acc_y.pow(2) < threshold {
-                        *acc_x += xrel;
-                        *acc_y += yrel;
+                        if !interface.safe_area.contains_point(*mouse_position) {
+                            *acc_x += xrel;
+                            *acc_y += yrel;
+                        } else {
+                            // Not dragging the map around, but inside safe area with left btn held:
+                            interface.click(Point::new(x, y), ship_game, true);
+                        }
                         // Haven't moved enough yet, don't move.
                         xrel = 0;
                         yrel = 0;
@@ -246,7 +275,18 @@ extern "C" fn run_frame() {
                         .unwrap_or(1);
                 renderer.zoom_camera(pixels);
             }
-            Event::KeyDown { keycode, .. } => println!("Pressed {keycode:?}!"),
+            Event::KeyDown { keycode, .. } => match keycode {
+                Some(Keycode::Space) => *debug_time_speedup = true,
+                Some(Keycode::Num1) => interface.open_tab(0),
+                Some(Keycode::Num2) => interface.open_tab(1),
+                Some(Keycode::Num3) => interface.open_tab(2),
+                Some(Keycode::Num4) => interface.open_tab(3),
+                _ => {}
+            },
+            Event::KeyUp { keycode, .. } => match keycode {
+                Some(Keycode::Space) => *debug_time_speedup = false,
+                _ => {}
+            },
             _ => {}
         }
     }
@@ -256,10 +296,11 @@ extern "C" fn run_frame() {
     *time += dt;
     *last_frame = now;
 
-    ship_game.update(dt);
+    let speed_scale = if *debug_time_speedup { 12.0 } else { 1.0 };
+    ship_game.update(dt * speed_scale);
 
     let (w, h) = window.drawable_size();
-    renderer.render(w as f32, h as f32, *time, &ship_game);
+    renderer.render(w as f32, h as f32, *time, &ship_game, interface);
     window.gl_swap_window();
 }
 

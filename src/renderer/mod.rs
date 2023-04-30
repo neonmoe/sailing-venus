@@ -1,6 +1,10 @@
-use crate::ship_game::{RoomType, ShipGame};
+use crate::{
+    interface::{Button, Interface, Tab},
+    ship_game::{Character, Job, RoomType, ShipGame, Task},
+};
 use fontdue::layout::{HorizontalAlign, VerticalAlign};
-use glam::{Mat4, Quat, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
+use glam::{IVec2, Mat4, Quat, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
+use sdl2::rect::Rect;
 use std::f32::consts::TAU;
 
 mod bumpalloc_buffer;
@@ -29,28 +33,38 @@ pub struct Renderer {
     camera: camera::Camera,
     text: font_renderer::FontRenderer,
 
+    debug_arrow: gltf::Gltf,
     ship: gltf::Gltf,
-    room: gltf::Gltf,
-    character: gltf::Gltf,
+    pub room: gltf::Gltf,
+    characters: [gltf::Gltf; Job::Count as usize],
     dashboard: gltf::Gltf,
+    pixel_gray: gltf::Gltf,
+    pixel_green: gltf::Gltf,
 }
 
 impl Renderer {
     pub fn new() -> Renderer {
+        let debug_arrow = gltf::load_glb(include_bytes!("../../resources/models/debug_arrow.glb"));
         let ship = gltf::load_glb(include_bytes!("../../resources/models/ship.glb"));
         let room = gltf::load_glb(include_bytes!("../../resources/models/room.glb"));
-        let character = gltf::load_glb(include_bytes!("../../resources/models/sailor.glb"));
+        let navigator = gltf::load_glb(include_bytes!("../../resources/models/navigator.glb"));
+        let sailor = gltf::load_glb(include_bytes!("../../resources/models/sailor.glb"));
         let dashboard = gltf::load_glb(include_bytes!("../../resources/models/dashboard.glb"));
+        let pixel_gray = gltf::load_glb(include_bytes!("../../resources/models/pixel_gray.glb"));
+        let pixel_green = gltf::load_glb(include_bytes!("../../resources/models/pixel_green.glb"));
         Renderer {
             gltf_shader: gltf::create_program(),
             draw_calls: DrawCalls::new(),
             ui_draw_calls: DrawCalls::new(),
             camera: camera::Camera::new(),
             text: font_renderer::FontRenderer::new(),
+            debug_arrow,
             ship,
             room,
-            character,
+            characters: [navigator, sailor],
             dashboard,
+            pixel_gray,
+            pixel_green,
         }
     }
 
@@ -98,15 +112,22 @@ impl Renderer {
         self.camera.distance = (self.camera.distance - pixels as f32 * 10.0).clamp(10.0, 50.0);
     }
 
-    pub fn render(&mut self, width: f32, height: f32, _time: f32, ship_game: &ShipGame) {
+    pub fn render(
+        &mut self,
+        width: f32,
+        height: f32,
+        _time: f32,
+        ship_game: &ShipGame,
+        interface: &mut Interface,
+    ) {
         // Render world:
 
         self.draw_calls.clear();
         for room in &ship_game.rooms {
             let position = Vec3::new(room.position.x, 0.0, room.position.y);
             match room.room_type {
-                RoomType::Empty => {}
-                RoomType::Navigation => {
+                RoomType::Navigation | RoomType::Sails => {
+                    // TODO: Room models
                     self.room
                         .draw(&mut self.draw_calls, Mat4::from_translation(position));
                 }
@@ -115,12 +136,32 @@ impl Renderer {
         for character in &ship_game.characters {
             let position = Vec3::new(character.position.x, 0.0, character.position.y);
             let rot = character.look_dir.angle_between(Vec2::Y);
-            self.character.draw(
+            self.characters[character.job as usize].draw(
                 &mut self.draw_calls,
                 Mat4::from_rotation_translation(Quat::from_rotation_y(rot), position),
             );
         }
         self.ship.draw(&mut self.draw_calls, Mat4::IDENTITY);
+
+        if cfg!(debug_assertions) {
+            let to_3d = |vec2: &IVec2| Vec3::new(vec2.x as f32 + 0.5, 0.5, vec2.y as f32 + 0.5);
+            for (debug_arrow, neighbors) in &ship_game.pf_map {
+                let debug_arrow = to_3d(debug_arrow);
+                self.debug_arrow
+                    .draw(&mut self.draw_calls, Mat4::from_translation(debug_arrow));
+                for neighbor in neighbors {
+                    let diff = to_3d(neighbor) - debug_arrow;
+                    self.debug_arrow.draw(
+                        &mut self.draw_calls,
+                        Mat4::from_scale_rotation_translation(
+                            Vec3::ONE * 0.3,
+                            Quat::IDENTITY,
+                            debug_arrow + diff * 0.25,
+                        ),
+                    );
+                }
+            }
+        }
 
         gl::call!(gl::Disable(gl::BLEND));
         gl::call!(gl::ClearColor(0.1, 0.1, 0.1, 1.0));
@@ -165,11 +206,33 @@ impl Renderer {
         gl::call!(gl::Clear(gl::DEPTH_BUFFER_BIT));
         gl::call!(gl::DepthFunc(gl::LESS));
 
-        // TODO: draw_call collect, proj+view matrix, draw_call draw just for the UI
-        // TODO: 2D UI can just use glTF and an orthographic projection
-        self.dashboard.draw(&mut self.ui_draw_calls, Mat4::IDENTITY);
+        // Draw dashboard & clock
+        let mut dashboard_transforms = self.dashboard.get_node_transforms();
+        for node_transform in &mut dashboard_transforms {
+            if node_transform.name == "Clock Hand" {
+                let (s, mut r, t) = node_transform.transform.to_scale_rotation_translation();
+                r *= Quat::from_rotation_z(-TAU * (ship_game.world_time * 60.0).floor() / 60.0);
+                node_transform.transform = Mat4::from_scale_rotation_translation(s, r, t);
+            }
+        }
+        self.dashboard.draw_animated(
+            &mut self.ui_draw_calls,
+            Mat4::IDENTITY,
+            &dashboard_transforms,
+        );
+        self.text.draw_text(
+            &mut self.ui_draw_calls,
+            &format!("DAY {:.0}", ship_game.world_time.floor()),
+            Vec2::new(-115.0, 68.0),
+            9.0,
+            (11.0, scale),
+            (HorizontalAlign::Center, VerticalAlign::Top),
+            Some(115.0 - 68.0),
+        );
 
-        for (i, text) in ["NAVIGATION", "SCHEDULE", "DELIVERIES", "OPTIONS"]
+        // Tabs
+        interface.buttons.clear();
+        for (i, text) in ["NAVIGATION", "SCHEDULE", "DELIVERIES", "GAME SETTINGS"]
             .iter()
             .enumerate()
         {
@@ -180,27 +243,118 @@ impl Renderer {
                 Vec2::new(-270.0, y),
                 9.0,
                 (20.0, scale),
-                (HorizontalAlign::Left, VerticalAlign::Middle),
+                (HorizontalAlign::Left, VerticalAlign::Top),
                 None,
+            );
+            interface.buttons.insert(
+                Button::Tab(i),
+                Rect::new(
+                    (width / 2.0 - 300.0) as i32,
+                    (height - (y - 2.0)) as i32,
+                    180,
+                    28,
+                ),
             );
         }
 
-        self.text.draw_text(
-            &mut self.ui_draw_calls,
-            &format!("Some text here too. The scale is currently: {scale:.1} with width {width}"),
-            Vec2::new(-30.0, 125.0),
-            9.0,
-            (16.0, scale),
-            (HorizontalAlign::Left, VerticalAlign::Top),
-            Some(320.0),
-        );
+        // Interface
+        let scr_x = -39.0;
+        let scr_y = 17.0;
+        let scr_h = 114.0;
+        let interface_rect = |x: f32, y: f32, w: f32, h: f32| {
+            Rect::new(
+                ((width / 2.0 + x) * scale) as i32,
+                ((height - h - y + 2.0) * scale).ceil() as i32,
+                (w * scale) as u32,
+                (h * scale) as u32,
+            )
+        };
+        interface.screen_area = interface_rect(scr_x, scr_y, 336.0, scr_h);
+        interface.safe_area = interface_rect(-322.0, 0.0, 644.0, 154.0);
+        match interface.tab {
+            Some(Tab::Navigation) => {}
+            Some(Tab::Schedule) => {
+                let l = 16.0;
+                let mut draw_legend = |pixel: &gltf::Gltf, name: &str, task: Task, x_off: f32| {
+                    let x = scr_x + 10.0 + x_off;
+                    let y = scr_y + scr_h - 10.0;
+                    pixel.draw(
+                        &mut self.ui_draw_calls,
+                        Mat4::from_scale_rotation_translation(
+                            Vec3::new(l, l, 1.0),
+                            Quat::IDENTITY,
+                            Vec3::new(x, y - l, 5.0),
+                        ),
+                    );
+                    self.text.draw_text(
+                        &mut self.ui_draw_calls,
+                        name,
+                        Vec2::new(x + 20.0, y + 2.0),
+                        5.0,
+                        (14.0, scale),
+                        (HorizontalAlign::Left, VerticalAlign::Top),
+                        None,
+                    );
+                    if interface.selected_task == task {
+                        pixel.draw(
+                            &mut self.ui_draw_calls,
+                            Mat4::from_scale_rotation_translation(
+                                Vec3::new(50.0, 2.0, 2.0),
+                                Quat::IDENTITY,
+                                Vec3::new(x + 18.0, y - l, 5.0),
+                            ),
+                        )
+                    }
+                    interface.buttons.insert(
+                        Button::TaskPicker(task),
+                        interface_rect(x, y - l - 5.0, 70.0, l + 10.0),
+                    );
+                };
+                draw_legend(&self.pixel_gray, "Sleep", Task::Sleep, 0.0);
+                draw_legend(&self.pixel_green, "Work", Task::Work, 85.0);
 
-        // Text rendering:
-        // TODO: Collect a bunch of strings, font indices and render positions to render as text
-        // TODO: Update texture with whatever needs updating
-        // TODO: Add a per-instance vertex attribute with a vec4 that contains texcoord bounds
-        // TODO: Render a single quad for each character, using the model transform for position & above for glyph selection
-        // the quad can be defined completely ahead-of-time as a single triangle, pretty sure
+                let mut draw_schedule = |char_idx: usize, character: &Character, y_offset: f32| {
+                    let x = scr_x + 18.0;
+                    let y = scr_y + 32.0 + y_offset;
+                    self.characters[character.job as usize].draw(
+                        &mut self.ui_draw_calls,
+                        Mat4::from_scale_rotation_translation(
+                            Vec3::ONE * 16.0,
+                            Quat::IDENTITY,
+                            Vec3::new(x, y - 22.0, 5.0),
+                        ),
+                    );
+                    for i in 0..12 {
+                        let pixel = match character.schedule[i] {
+                            Task::Sleep => &self.pixel_gray,
+                            Task::Work => &self.pixel_green,
+                        };
+                        let x = x + 16.0 + 20.0 * i as f32;
+                        pixel.draw(
+                            &mut self.ui_draw_calls,
+                            Mat4::from_scale_rotation_translation(
+                                Vec3::new(l, l, 1.0),
+                                Quat::IDENTITY,
+                                Vec3::new(x, y - l, 5.0),
+                            ),
+                        );
+                        interface.buttons.insert(
+                            Button::TaskAssigner {
+                                character: char_idx,
+                                time: i,
+                            },
+                            interface_rect(x, y - l - 5.0, l, l + 10.0),
+                        );
+                    }
+                };
+                for (i, character) in ship_game.characters.iter().enumerate() {
+                    draw_schedule(i, character, i as f32 * 40.0);
+                }
+            }
+            Some(Tab::Deliveries) => {}
+            Some(Tab::GameSettings) => {}
+            _ => {}
+        }
 
         let ui_proj_matrix =
             Mat4::orthographic_rh_gl(-width / 2.0, width / 2.0, 0.0, height, -100.0, 100.0)
