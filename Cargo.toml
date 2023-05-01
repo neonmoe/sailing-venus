@@ -5,6 +5,7 @@ edition = "2021"
 description = "Ludum Dare 53 compo entry about a trading ship sailing on the clouds of Venus."
 
 [package.metadata.bundle]
+name = "Sailing Venus"
 identifier = "moe.neon.sailing-venus"
 
 [dependencies]
