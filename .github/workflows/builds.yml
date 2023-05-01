@@ -60,7 +60,7 @@ jobs:
       run: cargo build --release --features bundled
     - name: Post-process
       run: |
-        cargo bundle --release
+        cargo bundle --release --features bundled
         strip target/release/bundle/osx/Sailing\ Venus.app/Contents/MacOS/sailing-venus
         ls -l target/release/
         cp target/release/libSDL2.dylib target/release/bundle/osx/Sailing\ Venus.app/Contents/MacOS/

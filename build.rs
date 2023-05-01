@@ -10,4 +10,7 @@ fn main() {
     Registry::new(Api::Gles2, (3, 0), Profile::Core, Fallbacks::None, [])
         .write_bindings(GlobalGenerator, &mut file)
         .unwrap();
+
+    #[cfg(target_os = "macos")]
+    println!("cargo:rustc-link-arg=-Wl,-rpath,@loader_path");
 }
