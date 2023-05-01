@@ -5,10 +5,9 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.70"
-bytemuck = { version = "1.13.1", features = ["derive"] }
+bytemuck = { version = "1.13.1", features = ["derive", "extern_crate_alloc"] }
 fontdue = "0.7.3"
 glam = { version = "0.23.0", features = ["bytemuck"] }
-image = { version = "0.24.6", default-features = false, features = ["png", "jpeg"] }
 sdl2 = "0.35.2"
 tinyjson = "2.5.1"
 

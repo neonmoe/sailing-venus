@@ -4,8 +4,6 @@ use crate::renderer::gltf::MAX_LIGHTS;
 use crate::renderer::{gl, gltf, FORWARD};
 use bytemuck::Zeroable;
 use glam::{Mat4, Quat, Vec3, Vec4};
-use image::imageops::FilterType;
-use image::DynamicImage;
 use std::collections::HashMap;
 use std::f32::consts::FRAC_PI_4;
 use std::ffi::c_void;
@@ -320,12 +318,12 @@ pub fn load_gltf(gltf: &str, resources: &[(&str, &[u8])]) -> gltf::Gltf {
     gl::write_1px_rgb_texture(white_tex, [0xFF, 0xFF, 0xFF]);
     gl::write_1px_rgb_texture(normal_tex, [0x7F, 0x7F, 0xFF]);
     for (i, image) in images_json.into_iter().enumerate() {
-        let Some(is_srgb) = is_srgb[i] else {
+        let Some(_is_srgb) = is_srgb[i] else {
             continue; // Not used by any material.
         };
 
         let image = image.get::<HashMap<_, _>>().unwrap();
-        let image_data = if let Some(uri) = image.get("uri") {
+        let _image_data = if let Some(uri) = image.get("uri") {
             let uri = uri.get::<String>().unwrap().as_str();
             match resources
                 .iter()
@@ -347,53 +345,7 @@ pub fn load_gltf(gltf: &str, resources: &[(&str, &[u8])]) -> gltf::Gltf {
             get_buffer_slice(buffer, offset, length)
         };
 
-        let mut parsed_image = image::load_from_memory(image_data).unwrap();
-        let (format, type_, bpp) = match parsed_image {
-            DynamicImage::ImageRgb8(_) => (gl::RGB, gl::UNSIGNED_BYTE, 3),
-            DynamicImage::ImageRgba8(_) => (gl::RGBA, gl::UNSIGNED_BYTE, 4),
-            DynamicImage::ImageRgb16(_) => (gl::RGB, gl::UNSIGNED_SHORT, 6),
-            DynamicImage::ImageRgba16(_) => (gl::RGBA, gl::UNSIGNED_SHORT, 8),
-            img => panic!("image {img:?} is of an unsupported format"),
-        };
-        let internal_format = match (is_srgb, format) {
-            (true, gl::RGBA) => gl::SRGB8_ALPHA8,
-            (true, gl::RGB) => gl::SRGB8,
-            (false, format) => format,
-            _ => unreachable!(),
-        };
-        gl::call!(gl::BindTexture(gl::TEXTURE_2D, gl_textures[i]));
-        let size = parsed_image.width().min(parsed_image.height());
-        let mip_levels = (size as f32).log2().floor() as i32 + 1;
-        for mip_level in 0..mip_levels {
-            let (width, height, data) = (
-                parsed_image.width() as i32,
-                parsed_image.height() as i32,
-                parsed_image.as_bytes(),
-            );
-            assert_eq!(width * height * bpp, data.len() as i32);
-            gl::call!(gl::TexImage2D(
-                gl::TEXTURE_2D,
-                mip_level,
-                internal_format as i32,
-                width,
-                height,
-                0,
-                format,
-                type_,
-                data.as_ptr() as *const c_void,
-            ));
-            if mip_level < mip_levels - 1 {
-                parsed_image = parsed_image.resize_exact(
-                    width as u32 / 2,
-                    height as u32 / 2,
-                    if is_srgb {
-                        FilterType::CatmullRom
-                    } else {
-                        FilterType::Triangle
-                    },
-                );
-            }
-        }
+        panic!("textures not supported");
     }
 
     let samplers_json_fallback = Vec::with_capacity(0);
