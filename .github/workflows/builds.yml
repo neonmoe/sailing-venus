@@ -29,7 +29,7 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: sailing-venus-linux.zip
+        name: sailing-venus-linux
         path: dist/
   build-windows:
     runs-on: windows-latest
@@ -38,7 +38,7 @@ jobs:
     - name: Install SDL2
       run: vcpkg.exe install sdl2:x64-windows
     - name: Build
-      run: cargo build --release --features bundled
+      run: cargo build --release --features "bundled,static-link"
     - name: Post-process
       run: |
         mkdir dist
@@ -46,7 +46,7 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: sailing-venus-windows.zip
+        name: sailing-venus-windows
         path: dist/
   build-macos:
     runs-on: macos-latest
@@ -62,11 +62,13 @@ jobs:
       run: |
         cargo bundle --release
         strip target/release/bundle/osx/Sailing\ Venus.app/Contents/MacOS/sailing-venus
+        ls -l target/release/
+        cp target/release/libSDL2.dylib target/release/bundle/osx/Sailing\ Venus.app/Contents/MacOS/
         mv target/release/bundle/osx/Sailing\ Venus.app Sailing\ Venus.app
         mkdir dist
         mv Excavation\ Site\ Mercury.app dist/Excavation\ Site\ Mercury.app
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: sailing-venus-macos.zip
+        name: sailing-venus-macos
         path: dist/

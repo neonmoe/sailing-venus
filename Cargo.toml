@@ -16,4 +16,5 @@ gl_generator = "0.14.0"
 
 [features]
 default = []
-bundled = ["sdl2/bundled", "sdl2/static-link"]
+bundled = ["sdl2/bundled"]
+static-link = ["sdl2/static-link"]
