@@ -11,6 +11,7 @@ pub use room::*;
 
 pub type PathfindingMap = HashMap<IVec2, Vec<IVec2>>;
 const SLEEPING_COORDS: Vec2 = Vec2::new(-2.5, -9.5);
+const MAX_SHIP_SPEED: f32 = 10.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Task {
@@ -26,6 +27,12 @@ pub struct ShipGame {
     pub selected_character: Option<usize>,
     /// Coordinate -> neighbor coordinates
     pub pf_map: PathfindingMap,
+    pub locations: Vec<(&'static str, Vec2)>,
+    pub current_location: Vec2,
+    pub current_target: Vec2,
+    pub current_heading: Vec2,
+    pub current_ship_speed: f32,
+    pub deliveries: Vec<(&'static str, Vec2, bool)>,
 }
 
 pub struct Character {
@@ -98,6 +105,20 @@ impl ShipGame {
                 },
             ],
             selected_character: Some(0),
+            locations: vec![
+                ("Morning Star Post Union", Vec2::new(0.0, 0.0)),
+                ("Terraforming Station Alpha-Beta", Vec2::new(100.0, 50.0)),
+                ("Firefly Space Station", Vec2::new(75.0, 75.0)),
+                ("A Mineral Miner's Shack", Vec2::new(-25.0, -50.0)),
+            ],
+            current_location: Vec2::ZERO,
+            current_target: Vec2::ZERO,
+            current_heading: Vec2::new(1.0, 0.0),
+            current_ship_speed: 0.0,
+            deliveries: vec![
+                ("Mineral refiner", Vec2::new(-25.0, -50.0), false),
+                ("Rocket fuel", Vec2::new(75.0, 75.0), false),
+            ],
         }
     }
 
@@ -164,6 +185,35 @@ impl ShipGame {
                 }
                 if bounds.contains(c.position) {
                     c.current_room = i;
+                }
+            }
+            let ship_loc_delta = self.current_target - self.current_location;
+            if room.room_type == RoomType::Navigation {
+                let direction = ship_loc_delta.normalize_or_zero();
+                if direction.length_squared() > 0.0 {
+                    self.current_heading = self.current_heading.lerp(direction, 10.0 * dt);
+                }
+            }
+            if room.room_type == RoomType::Sails {
+                let acceleration =
+                    room.currently_working_characters.len() as f32 / 20.0 * MAX_SHIP_SPEED;
+                if acceleration > 0.0 {
+                    self.current_ship_speed =
+                        (self.current_ship_speed + acceleration * dt).min(MAX_SHIP_SPEED);
+                } else {
+                    self.current_ship_speed =
+                        (self.current_ship_speed - MAX_SHIP_SPEED / 10.0 * dt).max(0.0);
+                }
+                let step = self.current_ship_speed * self.current_heading * dt;
+                if step.length_squared() >= ship_loc_delta.length_squared() {
+                    self.current_location = self.current_target;
+                } else {
+                    self.current_location += step;
+                }
+                for delivery in &mut self.deliveries {
+                    if delivery.1 == self.current_location {
+                        delivery.2 = true;
+                    }
                 }
             }
         }

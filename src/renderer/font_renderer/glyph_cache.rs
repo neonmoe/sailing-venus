@@ -18,7 +18,7 @@ pub struct GlyphCache {
 
 impl GlyphCache {
     pub fn new(texture: u32) -> GlyphCache {
-        let (width, height) = (2048, 2048);
+        let (width, height) = (4096, 4096);
         let mut pixels = Vec::with_capacity((width * height) as usize);
         for _ in 0..width * height {
             pixels.push(0xFFu8);

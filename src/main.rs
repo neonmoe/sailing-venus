@@ -245,6 +245,7 @@ extern "C" fn run_frame() {
                 ..
             } => {
                 *mouse_position = Point::new(x, y);
+                interface.hover(*mouse_position);
                 if *rmouse_pressed {
                     renderer.rotate_camera(xrel, yrel);
                 }

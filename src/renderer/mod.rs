@@ -237,6 +237,15 @@ impl Renderer {
             Some(115.0 - 68.0),
         );
 
+        let interface_rect = |x: f32, y: f32, w: f32, h: f32| {
+            Rect::new(
+                ((width / 2.0 + x) * scale) as i32,
+                ((height - h - y + 2.0) * scale).ceil() as i32,
+                (w * scale) as u32,
+                (h * scale) as u32,
+            )
+        };
+
         // Tabs
         interface.buttons.clear();
         for (i, text) in ["NAVIGATION", "SCHEDULE", "DELIVERIES", "GAME SETTINGS"]
@@ -255,12 +264,7 @@ impl Renderer {
             );
             interface.buttons.insert(
                 Button::Tab(i),
-                Rect::new(
-                    (width / 2.0 - 300.0) as i32,
-                    (height - (y - 2.0)) as i32,
-                    180,
-                    28,
-                ),
+                interface_rect(-300.0, y - 2.0 - 28.0, 180.0, 28.0),
             );
         }
 
@@ -268,18 +272,59 @@ impl Renderer {
         let scr_x = -39.0;
         let scr_y = 17.0;
         let scr_h = 114.0;
-        let interface_rect = |x: f32, y: f32, w: f32, h: f32| {
-            Rect::new(
-                ((width / 2.0 + x) * scale) as i32,
-                ((height - h - y + 2.0) * scale).ceil() as i32,
-                (w * scale) as u32,
-                (h * scale) as u32,
-            )
-        };
         interface.screen_area = interface_rect(scr_x, scr_y, 336.0, scr_h);
         interface.safe_area = interface_rect(-322.0, 0.0, 644.0, 154.0);
         match interface.tab {
-            Some(Tab::Navigation) => {}
+            Some(Tab::Navigation) => {
+                let mut draw_location = |name: &str, location: Vec2, i: usize| {
+                    let x = scr_x + 10.0;
+                    let y = scr_y + scr_h - i as f32 * 17.0 - 3.0;
+                    self.text.draw_text(
+                        &mut self.ui_draw_calls,
+                        name,
+                        Vec2::new(x, y),
+                        5.0,
+                        (14.0, scale),
+                        (HorizontalAlign::Left, VerticalAlign::Top),
+                        None,
+                    );
+                    if (location - ship_game.current_location).length() < 1.0 {
+                        self.pixel_gray.draw(
+                            &mut self.ui_draw_calls,
+                            Mat4::from_scale_rotation_translation(
+                                Vec3::new(315.0, 2.0, 2.0),
+                                Quat::IDENTITY,
+                                Vec3::new(x, y - 18.0, 5.0),
+                            ),
+                        )
+                    }
+                    interface.buttons.insert(
+                        Button::LocationList(i),
+                        interface_rect(x, y - 16.0, 300.0, 16.0),
+                    );
+                };
+                for (i, location) in ship_game.locations.iter().enumerate() {
+                    draw_location(location.0, location.1, i)
+                }
+                let mut target = "";
+                for (name, location) in &ship_game.locations {
+                    if *location == ship_game.current_target {
+                        target = name;
+                        break;
+                    }
+                }
+                let spd = ship_game.current_ship_speed;
+                let d = (ship_game.current_target - ship_game.current_location).length() / 3.6;
+                self.text.draw_text(
+                    &mut self.ui_draw_calls,
+                    &format!("Heading: {target}\nSpeed: {spd:.1} m/s, distance: {d:.1} km"),
+                    Vec2::new(scr_x + 10.0, scr_y + 38.0),
+                    5.0,
+                    (14.0, scale),
+                    (HorizontalAlign::Left, VerticalAlign::Top),
+                    None,
+                );
+            }
             Some(Tab::Schedule) => {
                 let l = 16.0;
                 let mut draw_legend = |pixel: &gltf::Gltf, name: &str, task: Task, x_off: f32| {
@@ -358,7 +403,40 @@ impl Renderer {
                     draw_schedule(i, character, i as f32 * 40.0);
                 }
             }
-            Some(Tab::Deliveries) => {}
+            Some(Tab::Deliveries) => {
+                let mut draw_delivery = |name: &str, done: bool, i: usize| {
+                    let x = scr_x + 10.0;
+                    let y = scr_y + scr_h - i as f32 * 25.0 - 10.0;
+                    let check = if done { "x" } else { "  " };
+                    self.text.draw_text(
+                        &mut self.ui_draw_calls,
+                        &format!("[{check}] {name}"),
+                        Vec2::new(x, y),
+                        5.0,
+                        (20.0, scale),
+                        (HorizontalAlign::Left, VerticalAlign::Top),
+                        None,
+                    );
+                };
+                let mut checks = 0;
+                for (i, delivery) in ship_game.deliveries.iter().enumerate() {
+                    draw_delivery(delivery.0, delivery.2, i);
+                    if delivery.2 {
+                        checks += 1;
+                    }
+                }
+                if checks == ship_game.deliveries.len() {
+                    self.text.draw_text(
+                        &mut self.ui_draw_calls,
+                        "Well done, you delivered all the packages!",
+                        Vec2::new(scr_x + 7.0, scr_y + 30.0),
+                        5.0,
+                        (14.0, scale),
+                        (HorizontalAlign::Left, VerticalAlign::Top),
+                        None,
+                    );
+                }
+            }
             Some(Tab::GameSettings) => {}
             _ => {}
         }
