@@ -107,9 +107,10 @@ impl Renderer {
 
     pub fn rotate_camera(&mut self, x: i32, y: i32) {
         // TODO: Add camera rotation sensitivity
-        self.camera.yaw += x as f32 * 0.01;
-        self.camera.pitch =
-            (self.camera.pitch + y as f32 * 0.01).clamp(30.0 / 360.0 * TAU, 90.0 / 360.0 * TAU);
+        let sensitivity = Vec2::ONE * 0.004;
+        self.camera.yaw += x as f32 * sensitivity.x;
+        self.camera.pitch = (self.camera.pitch + y as f32 * sensitivity.y)
+            .clamp(30.0 / 360.0 * TAU, 90.0 / 360.0 * TAU);
     }
 
     pub fn zoom_camera(&mut self, pixels: i32) {
