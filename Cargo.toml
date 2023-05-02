@@ -7,6 +7,7 @@ description = "Ludum Dare 53 compo entry about a trading ship sailing on the clo
 [package.metadata.bundle]
 name = "Sailing Venus"
 identifier = "moe.neon.sailing-venus"
+osx_minimum_system_version = "10.11"
 
 [dependencies]
 anyhow = "1.0.70"

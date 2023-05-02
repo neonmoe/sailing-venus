@@ -6,13 +6,12 @@ use sdl2::mouse::{MouseButton, MouseWheelDirection};
 use sdl2::rect::Point;
 use sdl2::sys::{SDL_Event, SDL_EventType, SDL_KeyCode};
 use sdl2::video::{GLProfile, Window};
-use sdl2::EventPump;
+use sdl2::{EventPump, TimerSubsystem};
 use std::error::Error;
 use std::ffi::{c_int, c_void};
 use std::fmt::Display;
 use std::panic;
 use std::ptr;
-use std::time::Instant;
 
 #[cfg(target_family = "wasm")]
 mod emscripten_h;
@@ -36,6 +35,10 @@ fn main() {
 
 fn _main() -> anyhow::Result<()> {
     let sdl_context = sdl2::init().map_err(SdlErr).context("sdl2::init failed")?;
+    let timer = sdl_context
+        .timer()
+        .map_err(SdlErr)
+        .context("sdl2 timer subsystem init failed")?;
     let video = sdl_context
         .video()
         .map_err(SdlErr)
@@ -131,7 +134,7 @@ fn _main() -> anyhow::Result<()> {
         unsafe { emscripten_h::emscripten_sleep(100) };
     }
 
-    unsafe { STATE = Some(State::new(window, event_pump)) };
+    unsafe { STATE = Some(State::new(window, timer, event_pump)) };
 
     #[cfg(target_family = "wasm")]
     {
@@ -148,6 +151,7 @@ static mut STATE: Option<State> = None;
 
 struct State {
     window: Window,
+    timer: TimerSubsystem,
     event_pump: EventPump,
     lmouse_pressed: bool,
     rmouse_pressed: bool,
@@ -156,18 +160,20 @@ struct State {
     accumulated_mouse_rel: (i32, i32),
     renderer: Renderer,
     time: f32,
-    last_frame: Instant,
+    last_frame: u32,
     ship_game: ShipGame,
     interface: Interface,
     debug_time_speedup: bool,
 }
 
 impl State {
-    pub fn new(window: Window, event_pump: EventPump) -> State {
+    pub fn new(window: Window, timer: TimerSubsystem, event_pump: EventPump) -> State {
         let renderer = Renderer::new();
         let ship_game = ShipGame::new(&renderer);
+        let last_frame = timer.ticks();
         State {
             renderer,
+            timer,
             window,
             event_pump,
             lmouse_pressed: false,
@@ -176,7 +182,7 @@ impl State {
             ship_space_mouse_position: Vec2::ZERO,
             accumulated_mouse_rel: (0, 0),
             time: 0.0,
-            last_frame: Instant::now(),
+            last_frame,
             ship_game,
             interface: Interface::new(),
             debug_time_speedup: false,
@@ -194,6 +200,7 @@ extern "C" fn run_frame() {
         accumulated_mouse_rel,
         renderer,
         window,
+        timer,
         time,
         last_frame,
         ship_game,
@@ -292,8 +299,8 @@ extern "C" fn run_frame() {
         }
     }
 
-    let now = Instant::now();
-    let dt = (now - *last_frame).as_secs_f32();
+    let now = timer.ticks();
+    let dt = (now - *last_frame) as f32 / 1000.0;
     *time += dt;
     *last_frame = now;
 
