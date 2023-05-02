@@ -14,11 +14,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: Install SDL2 and emscripten
+    - name: Install SDL2
       run: |
         sudo add-apt-repository -y "deb http://archive.ubuntu.com/ubuntu `lsb_release -sc` main universe restricted multiverse"
         sudo apt-get update -y -qq
-        sudo apt-get install libsdl2-dev emscripten
+        sudo apt-get install libsdl2-dev
+    - name: Install emscripten
+      run: |
+        git clone --depth 1 https://github.com/emscripten-core/emsdk
+        cd emsdk
+        ./emsdk install latest
+        ./emsdk activate latest
+        source ./emsdk_env.sh
     - name: Install the Rust wasm target
       uses: dtolnay/rust-toolchain@stable
       with:

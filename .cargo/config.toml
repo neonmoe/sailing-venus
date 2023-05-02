@@ -5,6 +5,7 @@ rustflags = [
     "-C", "link-arg=-sMAX_WEBGL_VERSION=2",
     "-C", "link-arg=-sASYNCIFY",
     "-C", "link-arg=-sASSERTIONS",
+    "-C", "link-arg=-sSTACK_SIZE=8388608", # 8MiB
     "-C", "link-arg=-sINITIAL_MEMORY=134217728", # 64 MiB
     "-C", "link-arg=-sALLOW_MEMORY_GROWTH", # Just in case.
 ]
